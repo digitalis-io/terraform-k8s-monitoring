@@ -9,13 +9,15 @@ mimir:
       data_dir: /data/alertmanager-tmp
     compactor:
       data_dir: /data/compactor-tmp
-    # ingester has no separate data_dir — it uses blocks_storage.tsdb.dir above
-
+    # blocks_storage.tsdb.dir is the ingester's local TSDB working directory.
+    # It must be distinct from blocks_storage.filesystem.dir (the completed-blocks store).
     blocks_storage:
+      tsdb:
+        dir: /data/tsdb
       backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
 %{ if storage_backend == "local" ~}
       filesystem:
-        dir: /data/tsdb
+        dir: /data/blocks
 %{ endif ~}
 %{ if storage_backend == "s3" ~}
       s3:

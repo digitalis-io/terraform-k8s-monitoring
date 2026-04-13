@@ -38,7 +38,9 @@ func TestMimirLocalStoragePathsDoNotOverlap(t *testing.T) {
 	assert.Contains(t, tmpl, "ruler-tmp", "ruler.rule_path must be distinct from storage dirs")
 	assert.Contains(t, tmpl, "alertmanager-tmp", "alertmanager.data_dir must be distinct from alertmanager_storage dirs")
 	assert.Contains(t, tmpl, "compactor-tmp", "compactor.data_dir must be distinct from storage dirs")
-	// ingester uses blocks_storage.tsdb.dir — no separate data_dir field exists in ingester.Config
+	// ingester uses blocks_storage.tsdb.dir which must differ from blocks_storage.filesystem.dir
+	assert.Contains(t, tmpl, "/data/tsdb", "blocks_storage.tsdb.dir must be set for the ingester")
+	assert.Contains(t, tmpl, "/data/blocks", "blocks_storage.filesystem.dir must differ from tsdb.dir")
 	assert.NotContains(t, tmpl, "ingester-wal", "ingester.wal is not a valid Mimir config field")
 }
 
