@@ -15,6 +15,7 @@ loki:
           period: 24h
   limits_config:
     retention_period: ${retention_period}
+    volume_enabled: true
   storage:
 %{ if storage_backend == "local" ~}
     type: filesystem
