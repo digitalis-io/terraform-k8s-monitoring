@@ -9,11 +9,7 @@ mimir:
       data_dir: /data/alertmanager-tmp
     compactor:
       data_dir: /data/compactor-tmp
-    ingester:
-      ring:
-        final_sleep: 0s
-      wal:
-        dir: /data/ingester-wal
+    # ingester has no separate data_dir — it uses blocks_storage.tsdb.dir above
 
     blocks_storage:
       backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
