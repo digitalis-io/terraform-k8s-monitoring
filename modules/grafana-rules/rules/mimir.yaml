@@ -1,0 +1,97 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Mimir
+    folder: Observability
+    interval: 1m
+    rules:
+      - uid: grafana-mimir-ingester-not-ready
+        title: Mimir Ingester Not Ready
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: |
+                count by (namespace) (
+                  kube_pod_status_ready{namespace=~".*mimir.*", condition="true"}
+                ) == 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Mimir ingesters not ready in {{ $labels.namespace }}"
+          description: "No Mimir ingester pods are ready."
+        labels:
+          severity: critical
+        isPaused: false
+
+      - uid: grafana-mimir-high-ingestion-errors
+        title: Mimir High Ingestion Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: |
+                sum(rate(cortex_ingester_ingested_samples_failures_total[5m])) by (namespace)
+                /
+                sum(rate(cortex_ingester_ingested_samples_total[5m])) by (namespace)
+                > 0.05
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Mimir ingestion error rate above 5% in {{ $labels.namespace }}"
+          description: "Mimir is rejecting a high percentage of ingested samples."
+        labels:
+          severity: warning
+        isPaused: false

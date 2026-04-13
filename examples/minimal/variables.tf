@@ -40,6 +40,12 @@ variable "prometheus_rules" {
   default     = {}
 }
 
+variable "grafana_rules" {
+  description = "Grafana-managed alert rules and notification contact points."
+  type        = any
+  default     = {}
+}
+
 variable "ingress_domain" {
   description = "Domain name to use for the Ingress"
   type        = string

@@ -55,6 +55,11 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ${namespace}
+    alerts:
+      enabled: true
+      label: grafana_alert
+      labelValue: "1"
+      searchNamespace: ${namespace}
 %{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" ~}
     datasources:
       defaultDatasourceEnabled: false
@@ -106,7 +111,7 @@ grafana:
           orgId: 1
           folder: Imported
           type: file
-          disableDeletion: false
+          disableDeletion: true
           editable: true
           options:
             path: /var/lib/grafana/dashboards/grafana-com

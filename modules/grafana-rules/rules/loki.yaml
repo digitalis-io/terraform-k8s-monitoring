@@ -1,0 +1,97 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Loki
+    folder: Observability
+    interval: 1m
+    rules:
+      - uid: grafana-loki-not-ready
+        title: Loki Not Ready
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: |
+                count by (namespace) (
+                  kube_pod_status_ready{namespace=~".*loki.*", condition="true"}
+                ) == 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Loki is not ready in {{ $labels.namespace }}"
+          description: "No Loki pods are in a ready state."
+        labels:
+          severity: critical
+        isPaused: false
+
+      - uid: grafana-loki-high-discard-rate
+        title: Loki High Discard Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: |
+                sum(rate(loki_discarded_samples_total[5m])) by (namespace, reason)
+                /
+                sum(rate(loki_distributor_lines_received_total[5m])) by (namespace)
+                > 0.05
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Loki discarding >5% of log lines in {{ $labels.namespace }}"
+          description: "Loki discard rate is high. Reason: {{ $labels.reason }}."
+        labels:
+          severity: warning
+        isPaused: false

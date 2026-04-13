@@ -1,0 +1,33 @@
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: default-receiver
+    group_by: ['grafana_folder', 'alertname', 'namespace']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+%{ if pagerduty_enabled ~}
+      - receiver: default-receiver
+        object_matchers:
+          - ["severity", "=~", "${pagerduty_severity}"]
+        continue: true
+%{ endif ~}
+%{ if slack_enabled ~}
+      - receiver: default-receiver
+        object_matchers:
+          - ["severity", "=~", "${slack_severity}"]
+        continue: ${pagerduty_enabled ? "true" : "false"}
+%{ endif ~}
+%{ if webhook_enabled ~}
+      - receiver: default-receiver
+        object_matchers:
+          - ["severity", "=~", "${webhook_severity}"]
+        continue: false
+%{ endif ~}
+%{ if email_enabled ~}
+      - receiver: default-receiver
+        object_matchers:
+          - ["severity", "=~", "${email_severity}"]
+        continue: false
+%{ endif ~}

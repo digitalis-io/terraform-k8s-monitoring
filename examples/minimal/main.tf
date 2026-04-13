@@ -97,3 +97,10 @@ module "prometheus_rules" {
     prometheus_release_id = module.prometheus.helm_release_id
   })
 }
+
+module "grafana_rules" {
+  source = "../../modules/grafana-rules"
+  grafana_rules = merge(var.grafana_rules, {
+    namespace = var.prometheus.namespace != null ? var.prometheus.namespace : "monitoring"
+  })
+}
