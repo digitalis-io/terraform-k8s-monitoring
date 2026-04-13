@@ -28,6 +28,21 @@ prometheus:
 %{ else ~}
       emptyDir: {}
 %{ endif ~}
+%{ if prometheus_ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${prometheus_ingress_class_name}
+    annotations:
+%{ for key, value in prometheus_ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${prometheus_ingress_host}
+    tls:
+      - secretName: ${prometheus_ingress_tls_secret}
+        hosts:
+          - ${prometheus_ingress_host}
+%{ endif ~}
 
 grafana:
   enabled: ${grafana_enabled}
@@ -44,21 +59,36 @@ grafana:
       jsonData:
         timeInterval: 60s
 %{ endif ~}
-%{ if ingress_enabled ~}
+%{ if grafana_ingress_enabled ~}
   ingress:
     enabled: true
-    ingressClassName: ${ingress_class_name}
+    ingressClassName: ${grafana_ingress_class_name}
     annotations:
-%{ for key, value in ingress_annotations ~}
+%{ for key, value in grafana_ingress_annotations ~}
       ${key}: "${value}"
 %{ endfor ~}
     hosts:
-      - ${ingress_host}
+      - ${grafana_ingress_host}
     tls:
-      - secretName: ${ingress_tls_secret}
+      - secretName: ${grafana_ingress_tls_secret}
         hosts:
-          - ${ingress_host}
+          - ${grafana_ingress_host}
 %{ endif ~}
 
 alertmanager:
   enabled: ${alertmanager_enabled}
+%{ if alertmanager_ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${alertmanager_ingress_class_name}
+    annotations:
+%{ for key, value in alertmanager_ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${alertmanager_ingress_host}
+    tls:
+      - secretName: ${alertmanager_ingress_tls_secret}
+        hosts:
+          - ${alertmanager_ingress_host}
+%{ endif ~}
