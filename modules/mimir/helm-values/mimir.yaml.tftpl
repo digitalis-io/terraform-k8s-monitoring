@@ -1,0 +1,103 @@
+mimir:
+  structuredConfig:
+    blocks_storage:
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/tsdb
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+      s3:
+        bucket_name: ${s3_blocks_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: false
+%{ endif ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_blocks_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_blocks_container}
+%{ if azure_storage_account_key != "" ~}
+        account_key: ${azure_storage_account_key}
+%{ endif ~}
+%{ endif ~}
+
+    alertmanager_storage:
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/alertmanager
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+      s3:
+        bucket_name: ${s3_alertmanager_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+%{ endif ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_alertmanager_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_alertmanager_container}
+%{ endif ~}
+
+    ruler_storage:
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/ruler
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+      s3:
+        bucket_name: ${s3_ruler_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+%{ endif ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_ruler_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_ruler_container}
+%{ endif ~}
+
+    limits:
+      compactor_blocks_retention_period: ${retention_period}
+
+%{ if ingress_enabled ~}
+nginx:
+  ingress:
+    enabled: true
+    hosts:
+      - host: ${ingress_host}
+        paths:
+          - path: /
+            pathType: Prefix
+%{ endif ~}
