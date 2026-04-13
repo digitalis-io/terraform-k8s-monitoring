@@ -1,0 +1,69 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-alerts
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: loki.components
+      rules:
+        - alert: LokiNotReady
+          expr: |
+            count by (namespace) (
+              kube_pod_status_ready{namespace=~".*loki.*", condition="true"}
+            ) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Loki is not ready in {{ $labels.namespace }}"
+            description: "No Loki pods are ready in namespace {{ $labels.namespace }}."
+
+        - alert: LokiHighIngestionErrors
+          expr: |
+            sum(rate(loki_discarded_samples_total[5m])) by (namespace, reason)
+            /
+            sum(rate(loki_distributor_lines_received_total[5m])) by (namespace)
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki discarding more than 5% of log lines in {{ $labels.namespace }}"
+            description: "Loki is discarding {{ $value | humanizePercentage }} of log lines. Reason: {{ $labels.reason }}."
+
+        - alert: LokiRequestLatencyHigh
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(loki_request_duration_seconds_bucket{route!~"(?i).*tail.*"}[5m])) by (le, namespace, route)
+            ) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki p99 request latency above 5s in {{ $labels.namespace }}"
+            description: "Loki route {{ $labels.route }} p99 latency is {{ $value | humanizeDuration }} in {{ $labels.namespace }}."
+
+        - alert: LokiStorageOperationFailures
+          expr: |
+            sum(rate(loki_boltdb_shipper_compact_tables_operation_failure_total[5m])) by (namespace) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki compaction failures in {{ $labels.namespace }}"
+            description: "Loki is experiencing table compaction failures in {{ $labels.namespace }}. Check object storage connectivity."
+
+    - name: loki.ingestion
+      rules:
+        - alert: LokiIngestionRateLimitReached
+          expr: |
+            sum(rate(loki_discarded_samples_total{reason="rate_limited"}[5m])) by (namespace) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki rate limiting log ingestion in {{ $labels.namespace }}"
+            description: "Loki is rate-limiting log ingestion in {{ $labels.namespace }}. Consider increasing ingestion_rate_mb or burst_size_mb in limits_config."

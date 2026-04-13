@@ -1,0 +1,73 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mimir-alerts
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: mimir.components
+      rules:
+        - alert: MimirIngesterNotReady
+          expr: |
+            count by (namespace) (
+              kube_pod_status_ready{namespace=~".*mimir.*", condition="true"}
+            ) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Mimir ingesters not ready in {{ $labels.namespace }}"
+            description: "No Mimir ingesters are in a ready state in namespace {{ $labels.namespace }}."
+
+        - alert: MimirCompactorNotRunning
+          expr: |
+            absent(kube_pod_status_ready{
+              namespace=~".*mimir.*",
+              pod=~".*compactor.*",
+              condition="true"
+            }) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mimir compactor is not running"
+            description: "No Mimir compactor pod has been ready for more than 15 minutes. Block compaction may fall behind."
+
+        - alert: MimirHighIngestionErrors
+          expr: |
+            sum(rate(cortex_ingester_ingested_samples_failures_total[5m])) by (namespace)
+            /
+            sum(rate(cortex_ingester_ingested_samples_total[5m])) by (namespace)
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mimir ingestion error rate above 5% in {{ $labels.namespace }}"
+            description: "Mimir is rejecting {{ $value | humanizePercentage }} of ingested samples in {{ $labels.namespace }}."
+
+        - alert: MimirQueryFrontendLatencyHigh
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(cortex_query_frontend_queue_duration_seconds_bucket[5m])) by (le, namespace)
+            ) > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mimir query frontend p99 queue latency above 10s in {{ $labels.namespace }}"
+            description: "Mimir query frontend p99 queue latency is {{ $value | humanizeDuration }} in {{ $labels.namespace }}."
+
+    - name: mimir.storage
+      rules:
+        - alert: MimirStorageOperationFailures
+          expr: |
+            sum(rate(thanos_objstore_operation_failures_total[5m])) by (namespace, component) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Mimir object storage operation failures in {{ $labels.namespace }}"
+            description: "Component {{ $labels.component }} is experiencing object storage failures in {{ $labels.namespace }}. Check cloud storage connectivity and credentials."

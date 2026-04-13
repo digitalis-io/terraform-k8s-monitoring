@@ -34,6 +34,12 @@ variable "cert_manager" {
   default     = {}
 }
 
+variable "prometheus_rules" {
+  description = "Prometheus alert rules and Alertmanager receiver configuration."
+  type        = any
+  default     = {}
+}
+
 variable "ingress_domain" {
   description = "Domain name to use for the Ingress"
   type        = string

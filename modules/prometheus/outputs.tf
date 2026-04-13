@@ -17,3 +17,8 @@ output "helm_release_version" {
   description = "Deployed chart version."
   value       = helm_release.prometheus.version
 }
+
+output "helm_release_id" {
+  description = "Helm release ID — use as prometheus_release_id in modules/prometheus-rules to enforce apply order."
+  value       = helm_release.prometheus.id
+}

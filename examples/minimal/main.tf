@@ -89,3 +89,11 @@ output "otlp_grpc_endpoint" {
   description = "OTLP gRPC endpoint for app instrumentation."
   value       = module.otel.otlp_grpc_endpoint
 }
+
+module "prometheus_rules" {
+  source = "../../modules/prometheus-rules"
+  prometheus_rules = merge(var.prometheus_rules, {
+    namespace             = var.prometheus.namespace != null ? var.prometheus.namespace : "monitoring"
+    prometheus_release_id = module.prometheus.helm_release_id
+  })
+}
