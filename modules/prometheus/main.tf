@@ -61,6 +61,8 @@ resource "helm_release" "prometheus" {
       loki_datasource_url  = var.prometheus.loki_datasource_url
       tempo_datasource_url = var.prometheus.tempo_datasource_url
 
+      grafana_dashboard_imports = var.prometheus.grafana_dashboard_imports
+
       requests_cpu    = var.prometheus.resources.requests_cpu
       requests_memory = var.prometheus.resources.requests_memory
       limits_cpu      = var.prometheus.resources.limits_cpu
@@ -69,4 +71,35 @@ resource "helm_release" "prometheus" {
   ]
 
   depends_on = [kubernetes_namespace.prometheus]
+}
+
+locals {
+  bundled_dashboards = {
+    for f in fileset("${path.module}/dashboards", "*.json") :
+    f => file("${path.module}/dashboards/${f}")
+  }
+  all_dashboards = merge(local.bundled_dashboards, var.prometheus.extra_dashboards)
+}
+
+# One ConfigMap per dashboard JSON — bundled files merged with caller-supplied extra_dashboards.
+# The Grafana sidecar watches for the grafana_dashboard label and auto-loads them.
+resource "kubernetes_config_map" "grafana_dashboard" {
+  for_each = var.prometheus.grafana_enabled ? local.all_dashboards : {}
+
+  metadata {
+    name      = "grafana-dashboard-${trimsuffix(each.key, ".json")}"
+    namespace = var.prometheus.namespace
+
+    labels = {
+      grafana_dashboard                      = "1"
+      "app.kubernetes.io/managed-by"         = "terraform"
+      "app.kubernetes.io/component"          = "monitoring"
+    }
+  }
+
+  data = {
+    "${each.key}" = each.value
+  }
+
+  depends_on = [helm_release.prometheus]
 }

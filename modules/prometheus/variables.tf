@@ -50,6 +50,23 @@ variable "prometheus" {
     # Tempo integration — wire from module.tempo.datasource_url
     tempo_datasource_url = optional(string, "")
 
+    # Grafana dashboard IDs to import from grafana.com (in addition to the bundled JSON dashboards).
+    # Each entry: { gnet_id = 1860, revision = 37, datasource = "Mimir" }
+    # revision defaults to 1 if omitted; datasource defaults to "Mimir".
+    grafana_dashboard_imports = optional(list(object({
+      gnet_id    = number
+      revision   = optional(number, 1)
+      datasource = optional(string, "Mimir")
+    })), [
+      { gnet_id = 1860, revision = 37, datasource = "Mimir" }
+    ])
+
+    # Additional dashboard JSON files supplied by the caller.
+    # key = filename (e.g. "my-app.json"), value = JSON content via file().
+    # Merged with the bundled dashboards in modules/prometheus/dashboards/.
+    # Example: { "my-app.json" = file("${path.module}/dashboards/my-app.json") }
+    extra_dashboards = optional(map(string), {})
+
     resources = optional(object({
       requests_cpu    = optional(string, "200m")
       requests_memory = optional(string, "512Mi")

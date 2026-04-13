@@ -48,11 +48,18 @@ prometheus:
 
 grafana:
   enabled: ${grafana_enabled}
-%{ if grafana_enabled && (mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "") ~}
+%{ if grafana_enabled ~}
   sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ${namespace}
+%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" ~}
     datasources:
       defaultDatasourceEnabled: false
   additionalDataSources:
+%{ endif ~}
 %{ if mimir_datasource_url != "" ~}
     - name: Mimir
       type: prometheus
@@ -89,6 +96,28 @@ grafana:
           filterByTraceID: true
           filterBySpanID: false
 %{ endif ~}
+%{ endif ~}
+%{ if length(grafana_dashboard_imports) > 0 ~}
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: grafana-com
+          orgId: 1
+          folder: Imported
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/grafana-com
+  dashboards:
+    grafana-com:
+%{ for d in grafana_dashboard_imports ~}
+      dashboard-${d.gnet_id}:
+        gnetId: ${d.gnet_id}
+        revision: ${d.revision}
+        datasource: ${d.datasource}
+%{ endfor ~}
 %{ endif ~}
 %{ endif ~}
 %{ if grafana_ingress_enabled ~}
