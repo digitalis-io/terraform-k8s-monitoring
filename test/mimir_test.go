@@ -23,6 +23,21 @@ func TestMimirMinimalValidate(t *testing.T) {
 	terraform.InitAndValidate(t, opts)
 }
 
+// TestMimirLocalStoragePathsDoNotOverlap verifies that the template sets
+// ruler.rule_path to a directory that cannot overlap with blocks_storage or
+// ruler_storage filesystem dirs. Mimir rejects configs where these paths share
+// a common prefix (e.g. /data vs /data/tsdb).
+func TestMimirLocalStoragePathsDoNotOverlap(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile("../modules/mimir/helm-values/mimir.yaml.tftpl")
+	require.NoError(t, err, "helm values template must exist")
+
+	tmpl := string(content)
+	assert.Contains(t, tmpl, "rule_path:", "template must explicitly set ruler.rule_path to avoid path conflicts")
+	assert.Contains(t, tmpl, "ruler-tmp", "ruler.rule_path must be distinct from storage dirs (e.g. /data/ruler-tmp)")
+}
+
 // TestMimirIngressTemplateHasTLS verifies that the Helm values template includes
 // the TLS section, ingressClassName, and annotation support when ingress is enabled.
 // This guards against regressions where TLS is accidentally removed from the template.
