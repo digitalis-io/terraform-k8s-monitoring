@@ -9,3 +9,9 @@ variable "prometheus" {
   type        = any
   default     = {}
 }
+
+variable "loki" {
+  description = "Loki configuration passed through to the module."
+  type        = any
+  default     = {}
+}

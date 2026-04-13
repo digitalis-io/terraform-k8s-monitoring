@@ -21,6 +21,14 @@ module "prometheus" {
   })
 }
 
+module "loki" {
+  source = "../../modules/loki"
+  loki = merge(var.loki, {
+    # Mimir already created the monitoring namespace; skip re-creation.
+    create_namespace = false
+  })
+}
+
 output "remote_write_endpoint" {
   description = "Prometheus remote_write URL."
   value       = module.mimir.remote_write_endpoint
@@ -34,4 +42,9 @@ output "query_frontend_endpoint" {
 output "grafana_service" {
   description = "In-cluster Grafana service URL."
   value       = module.prometheus.grafana_service
+}
+
+output "loki_datasource_url" {
+  description = "Grafana datasource URL for Loki."
+  value       = module.loki.datasource_url
 }

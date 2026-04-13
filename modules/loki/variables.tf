@@ -1,0 +1,82 @@
+variable "loki" {
+  description = "Grafana Loki configuration. All fields are optional with safe defaults for a local-disk deployment."
+  type = object({
+    chart_version    = optional(string, "6.6.0")
+    namespace        = optional(string, "monitoring")
+    create_namespace = optional(bool, true)
+    replicas         = optional(number, 1)
+    retention_period = optional(string, "744h") # 31 days
+
+    resources = optional(object({
+      requests_cpu    = optional(string, "100m")
+      requests_memory = optional(string, "256Mi")
+      limits_cpu      = optional(string, "2")
+      limits_memory   = optional(string, "2Gi")
+    }), {})
+
+    storage = optional(object({
+      # Which backend to use. One of: local, s3, gcs, azure.
+      # Buckets/containers must be pre-created by the caller — this module does not create them.
+      backend = optional(string, "local")
+
+      # S3 — supply names of pre-existing buckets
+      s3_chunks_bucket = optional(string, "")
+      s3_ruler_bucket  = optional(string, "")
+      s3_region        = optional(string, "")
+      s3_endpoint      = optional(string, "") # override for MinIO or custom endpoints
+      s3_access_key    = optional(string, "") # leave empty to use IRSA
+      s3_secret_key    = optional(string, "") # leave empty to use IRSA
+
+      # GCS — supply names of pre-existing buckets
+      gcs_chunks_bucket      = optional(string, "")
+      gcs_ruler_bucket       = optional(string, "")
+      gcs_service_account_key = optional(string, "") # leave empty to use Workload Identity
+
+      # Azure — supply names of pre-existing containers
+      azure_storage_account     = optional(string, "")
+      azure_chunks_container    = optional(string, "")
+      azure_ruler_container     = optional(string, "")
+      azure_storage_account_key = optional(string, "") # leave empty to use Workload Identity
+    }), {})
+
+    # Annotations to add to the Loki ServiceAccount.
+    # Use this for IRSA, GKE Workload Identity, or Azure Workload Identity.
+    # No IAM resources are created by this module; pre-create the role/SA and supply the annotation here.
+    # Examples:
+    #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/loki" }
+    #   Workload Identity: { "iam.gke.io/gcp-service-account" = "loki@project.iam.gserviceaccount.com" }
+    service_account_annotations = optional(map(string), {})
+  })
+  default = {}
+
+  validation {
+    condition     = contains(["local", "s3", "gcs", "azure"], var.loki.storage.backend)
+    error_message = "storage.backend must be one of: local, s3, gcs, azure."
+  }
+
+  validation {
+    condition = !(var.loki.storage.backend == "s3" && (
+      var.loki.storage.s3_chunks_bucket == "" ||
+      var.loki.storage.s3_ruler_bucket == "" ||
+      var.loki.storage.s3_region == ""
+    ))
+    error_message = "When storage.backend is 's3', s3_chunks_bucket, s3_ruler_bucket, and s3_region are required."
+  }
+
+  validation {
+    condition = !(var.loki.storage.backend == "gcs" && (
+      var.loki.storage.gcs_chunks_bucket == "" ||
+      var.loki.storage.gcs_ruler_bucket == ""
+    ))
+    error_message = "When storage.backend is 'gcs', gcs_chunks_bucket and gcs_ruler_bucket are required."
+  }
+
+  validation {
+    condition = !(var.loki.storage.backend == "azure" && (
+      var.loki.storage.azure_storage_account == "" ||
+      var.loki.storage.azure_chunks_container == "" ||
+      var.loki.storage.azure_ruler_container == ""
+    ))
+    error_message = "When storage.backend is 'azure', azure_storage_account and both azure container names are required."
+  }
+}

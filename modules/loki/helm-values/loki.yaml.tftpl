@@ -1,0 +1,106 @@
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: ${storage_backend == "local" ? "filesystem" : storage_backend}
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: ${retention_period}
+  storage:
+%{ if storage_backend == "local" ~}
+    type: filesystem
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+    type: s3
+    s3:
+      region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+      endpoint: ${s3_endpoint}
+      insecure: false
+%{ endif ~}
+%{ if s3_access_key != "" ~}
+      accessKeyId: ${s3_access_key}
+      secretAccessKey: ${s3_secret_key}
+%{ endif ~}
+    bucketNames:
+      chunks: ${s3_chunks_bucket}
+      ruler: ${s3_ruler_bucket}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+    type: gcs
+    gcs:
+%{ if gcs_service_account_key != "" ~}
+      service_account: ${gcs_service_account_key}
+%{ endif ~}
+    bucketNames:
+      chunks: ${gcs_chunks_bucket}
+      ruler: ${gcs_ruler_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+    type: azure
+    azure:
+      accountName: ${azure_storage_account}
+%{ if azure_storage_account_key != "" ~}
+      accountKey: ${azure_storage_account_key}
+%{ endif ~}
+    bucketNames:
+      chunks: ${azure_chunks_container}
+      ruler: ${azure_ruler_container}
+%{ endif ~}
+
+singleBinary:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+%{ if storage_backend == "local" ~}
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+%{ endif ~}
+
+# Disable components not needed in SingleBinary mode
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# Disable gateway — access Loki directly via singleBinary service
+gateway:
+  enabled: false
+
+# Disable self-monitoring and test
+test:
+  enabled: false
+lokiCanary:
+  enabled: false
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+%{ if length(service_account_annotations) > 0 ~}
+serviceAccount:
+  create: true
+  annotations:
+%{ for key, value in service_account_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
