@@ -13,6 +13,11 @@ output "query_frontend_endpoint" {
   value       = "http://mimir-query-frontend.${var.mimir.namespace}.svc.cluster.local:8080/prometheus"
 }
 
+output "tenant_id" {
+  description = "Mimir tenant ID. Pass as X-Scope-OrgID header in remote_write and Grafana datasource config."
+  value       = var.mimir.tenant_id
+}
+
 output "helm_release_name" {
   description = "Name of the Helm release."
   value       = helm_release.mimir.name

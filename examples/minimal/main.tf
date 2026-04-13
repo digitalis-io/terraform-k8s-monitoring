@@ -6,6 +6,11 @@
 #   examples/aws  — S3 backend
 #   examples/gcp  — GCS backend
 
+module "cert_manager" {
+  source       = "../../modules/cert-manager"
+  cert_manager = var.cert_manager
+}
+
 module "mimir" {
   source = "../../modules/mimir"
   mimir  = var.mimir
@@ -18,6 +23,11 @@ module "prometheus" {
     create_namespace       = false
     mimir_remote_write_url = module.mimir.remote_write_endpoint
     mimir_datasource_url   = module.mimir.query_frontend_endpoint
+    mimir_tenant_id        = module.mimir.tenant_id
+    grafana_ingress = {
+      enabled = true
+      host    = "grafana.${var.ingress_domain}"
+    }
   })
 }
 
@@ -61,4 +71,19 @@ output "loki_datasource_url" {
 output "tempo_datasource_url" {
   description = "Grafana datasource URL for Tempo."
   value       = module.tempo.datasource_url
+}
+
+module "otel" {
+  source = "../../modules/otel-collector"
+  otel = merge(var.otel, {
+    create_namespace = false
+    tempo_endpoint   = module.tempo.otlp_grpc_endpoint
+    mimir_endpoint   = module.mimir.remote_write_endpoint
+    loki_endpoint    = module.loki.datasource_url
+  })
+}
+
+output "otlp_grpc_endpoint" {
+  description = "OTLP gRPC endpoint for app instrumentation."
+  value       = module.otel.otlp_grpc_endpoint
 }

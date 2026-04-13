@@ -6,6 +6,8 @@ prometheus:
     remoteWrite:
       - url: ${mimir_remote_write_url}
         name: mimir
+        headers:
+          X-Scope-OrgID: "${mimir_tenant_id}"
 %{ endif ~}
     resources:
       requests:
@@ -58,6 +60,9 @@ grafana:
       isDefault: true
       jsonData:
         timeInterval: 60s
+        httpHeaderName1: "X-Scope-OrgID"
+      secureJsonData:
+        httpHeaderValue1: "${mimir_tenant_id}"
 %{ endif ~}
 %{ if grafana_ingress_enabled ~}
   ingress:

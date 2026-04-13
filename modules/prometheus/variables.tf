@@ -42,6 +42,8 @@ variable "prometheus" {
     # Mimir integration — leave empty to deploy standalone (no remote_write / Grafana datasource)
     mimir_remote_write_url = optional(string, "")
     mimir_datasource_url   = optional(string, "")
+    # Tenant ID for the X-Scope-OrgID header sent to Mimir. Wire from module.mimir.tenant_id.
+    mimir_tenant_id        = optional(string, "anonymous")
 
     resources = optional(object({
       requests_cpu    = optional(string, "200m")

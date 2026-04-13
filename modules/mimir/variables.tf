@@ -12,6 +12,10 @@ variable "mimir" {
     })
     replicas         = optional(number, 1)
     retention_period = optional(string, "30d")
+    # Tenant ID sent in X-Scope-OrgID header by all clients (Prometheus, Grafana).
+    # "anonymous" works with multi-tenancy enabled and requires no extra config.
+    # Set to a custom value to isolate metrics by team/environment.
+    tenant_id        = optional(string, "anonymous")
 
     resources = optional(object({
       requests_cpu    = optional(string, "100m")

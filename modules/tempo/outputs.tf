@@ -17,3 +17,13 @@ output "helm_release_version" {
   description = "Deployed chart version."
   value       = helm_release.tempo.version
 }
+
+output "otlp_grpc_endpoint" {
+  description = "OTLP gRPC endpoint for sending traces to Tempo (port 4317)."
+  value       = "http://tempo.${var.tempo.namespace}.svc.cluster.local:4317"
+}
+
+output "otlp_http_endpoint" {
+  description = "OTLP HTTP endpoint for sending traces to Tempo (port 4318)."
+  value       = "http://tempo.${var.tempo.namespace}.svc.cluster.local:4318"
+}

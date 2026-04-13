@@ -1,0 +1,99 @@
+mode: ${mode}
+
+image:
+  repository: "${image_repository}"
+%{ if image_tag != "" ~}
+  tag: "${image_tag}"
+%{ endif ~}
+  pullPolicy: "${image_pull_policy}"
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+%{ if mode == "daemonset" ~}
+    filelog:
+      include:
+        - /var/log/pods/*/*/*.log
+      include_file_path: true
+      operators:
+        - type: container
+%{ endif ~}
+
+  processors:
+    batch: {}
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+      spike_limit_percentage: 25
+
+  exporters:
+    debug:
+      verbosity: basic
+%{ if tempo_endpoint != "" ~}
+    otlp/tempo:
+      endpoint: ${tempo_endpoint}
+      tls:
+        insecure: true
+%{ endif ~}
+%{ if mimir_endpoint != "" ~}
+    prometheusremotewrite:
+      endpoint: ${mimir_endpoint}
+%{ endif ~}
+%{ if loki_endpoint != "" ~}
+    otlphttp/loki:
+      endpoint: ${loki_endpoint}/otlp
+      tls:
+        insecure: true
+%{ endif ~}
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: ${traces_exporters}
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: ${metrics_exporters}
+      logs:
+        receivers: ${logs_receivers}
+        processors: [memory_limiter, batch]
+        exporters: ${logs_exporters}
+
+resources:
+  requests:
+    cpu: ${requests_cpu}
+    memory: ${requests_memory}
+  limits:
+    cpu: ${limits_cpu}
+    memory: ${limits_memory}
+
+%{ if mode == "daemonset" ~}
+extraVolumes:
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+extraVolumeMounts:
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+%{ endif ~}
+
+%{ if length(service_account_annotations) > 0 ~}
+serviceAccount:
+  create: true
+  annotations:
+%{ for key, value in service_account_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}

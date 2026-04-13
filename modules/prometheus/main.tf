@@ -56,6 +56,7 @@ resource "helm_release" "prometheus" {
 
       mimir_remote_write_url = var.prometheus.mimir_remote_write_url
       mimir_datasource_url   = var.prometheus.mimir_datasource_url
+      mimir_tenant_id        = var.prometheus.mimir_tenant_id
 
       requests_cpu    = var.prometheus.resources.requests_cpu
       requests_memory = var.prometheus.resources.requests_memory
