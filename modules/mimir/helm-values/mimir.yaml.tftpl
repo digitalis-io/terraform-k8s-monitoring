@@ -1,10 +1,19 @@
 mimir:
   structuredConfig:
-    # ruler.rule_path is the ruler's local working directory for temporary rule files.
-    # It must not overlap with any storage directory — the chart default is /data,
-    # which conflicts with blocks_storage.filesystem.dir=/data/tsdb.
+    # These are local working directories used at runtime by each component.
+    # They must not overlap with any storage path — chart defaults (/data) conflict
+    # with the filesystem storage dirs defined below.
     ruler:
       rule_path: /data/ruler-tmp
+    alertmanager:
+      data_dir: /data/alertmanager-tmp
+    compactor:
+      data_dir: /data/compactor-tmp
+    ingester:
+      ring:
+        final_sleep: 0s
+      wal:
+        dir: /data/ingester-wal
 
     blocks_storage:
       backend: ${storage_backend == "local" ? "filesystem" : storage_backend}

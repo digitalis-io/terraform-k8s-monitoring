@@ -34,8 +34,11 @@ func TestMimirLocalStoragePathsDoNotOverlap(t *testing.T) {
 	require.NoError(t, err, "helm values template must exist")
 
 	tmpl := string(content)
-	assert.Contains(t, tmpl, "rule_path:", "template must explicitly set ruler.rule_path to avoid path conflicts")
-	assert.Contains(t, tmpl, "ruler-tmp", "ruler.rule_path must be distinct from storage dirs (e.g. /data/ruler-tmp)")
+	assert.Contains(t, tmpl, "rule_path:", "ruler.rule_path must be set to avoid path overlap with blocks storage")
+	assert.Contains(t, tmpl, "ruler-tmp", "ruler.rule_path must be distinct from storage dirs")
+	assert.Contains(t, tmpl, "alertmanager-tmp", "alertmanager.data_dir must be distinct from alertmanager_storage dirs")
+	assert.Contains(t, tmpl, "compactor-tmp", "compactor.data_dir must be distinct from storage dirs")
+	assert.Contains(t, tmpl, "ingester-wal", "ingester WAL dir must be explicitly set")
 }
 
 // TestMimirIngressTemplateHasTLS verifies that the Helm values template includes
