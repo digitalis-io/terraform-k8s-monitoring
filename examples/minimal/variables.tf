@@ -15,3 +15,9 @@ variable "loki" {
   type        = any
   default     = {}
 }
+
+variable "tempo" {
+  description = "Tempo configuration passed through to the module."
+  type        = any
+  default     = {}
+}

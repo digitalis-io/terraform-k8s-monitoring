@@ -26,6 +26,15 @@ module "loki" {
   loki = merge(var.loki, {
     # Mimir already created the monitoring namespace; skip re-creation.
     create_namespace = false
+    # deployment_mode = "scalable"
+  })
+}
+
+module "tempo" {
+  source = "../../modules/tempo"
+  tempo = merge(var.tempo, {
+    # Mimir already created the monitoring namespace; skip re-creation.
+    create_namespace = false
   })
 }
 
@@ -47,4 +56,9 @@ output "grafana_service" {
 output "loki_datasource_url" {
   description = "Grafana datasource URL for Loki."
   value       = module.loki.datasource_url
+}
+
+output "tempo_datasource_url" {
+  description = "Grafana datasource URL for Tempo."
+  value       = module.tempo.datasource_url
 }

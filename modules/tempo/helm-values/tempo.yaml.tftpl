@@ -1,0 +1,159 @@
+tempo:
+  reportingEnabled: false
+  retention: ${retention}
+  storage:
+    trace:
+%{ if storage_backend == "local" ~}
+      backend: local
+      local:
+        path: /var/tempo/traces
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+      backend: s3
+      s3:
+        bucket: ${s3_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: false
+%{ endif ~}
+%{ if s3_access_key != "" ~}
+        access_key: ${s3_access_key}
+        secret_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      backend: gcs
+      gcs:
+        bucket_name: ${gcs_bucket}
+%{ if gcs_service_account_key != "" ~}
+        service_account: ${gcs_service_account_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      backend: azure
+      azure:
+        storage_account_name: ${azure_storage_account}
+        container_name: ${azure_container}
+%{ if azure_storage_account_key != "" ~}
+        storage_account_key: ${azure_storage_account_key}
+%{ endif ~}
+%{ endif ~}
+
+  # Enable OTLP receivers
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+# Deployment mode
+%{ if deployment_mode == "monolithic" ~}
+ingester:
+  replicas: 0
+distributor:
+  replicas: 0
+compactor:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+metricsGenerator:
+  enabled: false
+
+gateway:
+  enabled: false
+
+traces:
+  otlp:
+    http:
+      enabled: true
+    grpc:
+      enabled: true
+
+# Run everything in a single container
+tempo:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+%{ if storage_backend == "local" ~}
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+%{ endif ~}
+%{ endif ~}
+%{ if deployment_mode == "distributed" ~}
+ingester:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+distributor:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+compactor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+querier:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+queryFrontend:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+
+gateway:
+  enabled: true
+
+traces:
+  otlp:
+    http:
+      enabled: true
+    grpc:
+      enabled: true
+%{ endif ~}
+
+%{ if length(service_account_annotations) > 0 ~}
+serviceAccount:
+  create: true
+  annotations:
+%{ for key, value in service_account_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
