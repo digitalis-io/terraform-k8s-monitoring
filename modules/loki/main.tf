@@ -51,6 +51,7 @@ resource "helm_release" "loki" {
       azure_storage_account_key = var.loki.storage.azure_storage_account_key
 
       # Helm chart behaviour
+      deployment_mode  = var.loki.deployment_mode
       replicas         = var.loki.replicas
       retention_period = var.loki.retention_period
 

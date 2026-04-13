@@ -4,6 +4,9 @@ variable "loki" {
     chart_version    = optional(string, "6.6.0")
     namespace        = optional(string, "monitoring")
     create_namespace = optional(bool, true)
+    # "single-binary" — all components in one process (default, good for dev/blog)
+    # "scalable"      — separate read, write, backend replica sets (SimpleScalable mode)
+    deployment_mode  = optional(string, "single-binary")
     replicas         = optional(number, 1)
     retention_period = optional(string, "744h") # 31 days
 
@@ -48,6 +51,11 @@ variable "loki" {
     service_account_annotations = optional(map(string), {})
   })
   default = {}
+
+  validation {
+    condition     = contains(["single-binary", "scalable"], var.loki.deployment_mode)
+    error_message = "deployment_mode must be one of: single-binary, scalable."
+  }
 
   validation {
     condition     = contains(["local", "s3", "gcs", "azure"], var.loki.storage.backend)

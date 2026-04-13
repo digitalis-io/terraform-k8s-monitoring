@@ -1,4 +1,4 @@
-deploymentMode: SingleBinary
+deploymentMode: ${deployment_mode == "scalable" ? "SimpleScalable" : "SingleBinary"}
 
 loki:
   auth_enabled: false
@@ -57,6 +57,7 @@ loki:
       ruler: ${azure_ruler_container}
 %{ endif ~}
 
+%{ if deployment_mode == "single-binary" ~}
 singleBinary:
   replicas: ${replicas}
   resources:
@@ -72,14 +73,44 @@ singleBinary:
     size: 10Gi
     storageClass: ""
 %{ endif ~}
-
-# Disable components not needed in SingleBinary mode
 backend:
   replicas: 0
 read:
   replicas: 0
 write:
   replicas: 0
+%{ endif ~}
+%{ if deployment_mode == "scalable" ~}
+singleBinary:
+  replicas: 0
+read:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+write:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+backend:
+  replicas: ${replicas}
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+%{ endif ~}
 
 # Disable gateway — access Loki directly via singleBinary service
 gateway:
