@@ -44,6 +44,22 @@ func TestMimirLocalStoragePathsDoNotOverlap(t *testing.T) {
 	assert.NotContains(t, tmpl, "ingester-wal", "ingester.wal is not a valid Mimir config field")
 }
 
+// TestMimirTemplateHasServiceAccountAnnotations verifies that the Helm values
+// template supports injecting cloud-provider service account annotations
+// (IRSA for AWS, Workload Identity for GCP/Azure) onto Mimir's service accounts.
+func TestMimirTemplateHasServiceAccountAnnotations(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile("../modules/mimir/helm-values/mimir.yaml.tftpl")
+	require.NoError(t, err)
+
+	tmpl := string(content)
+	assert.Contains(t, tmpl, "serviceAccount", "template must configure Mimir service account")
+	assert.Contains(t, tmpl, "irsa_role_arn", "template must support AWS IRSA annotation")
+	assert.Contains(t, tmpl, "gcp_service_account_email", "template must support GCP Workload Identity annotation")
+	assert.Contains(t, tmpl, "azure_workload_identity_client_id", "template must support Azure Workload Identity annotation")
+}
+
 // TestMimirIngressTemplateHasTLS verifies that the Helm values template includes
 // the TLS section, ingressClassName, and annotation support when ingress is enabled.
 // This guards against regressions where TLS is accidentally removed from the template.

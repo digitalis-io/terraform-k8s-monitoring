@@ -47,6 +47,15 @@ variable "mimir" {
       azure_alertmanager_container = optional(string, "")
       azure_storage_account_key    = optional(string, "") # leave empty to use Workload Identity
     }), {})
+
+    # Cloud-provider service account annotations for workload identity / IRSA.
+    # Supply at most one set of credentials — whichever matches your cloud provider.
+    # No IAM resources are created by this module; you must pre-create the role/SA.
+    service_account = optional(object({
+      irsa_role_arn                     = optional(string, "") # AWS: IAM role ARN for IRSA
+      gcp_service_account_email         = optional(string, "") # GCP: service account email for Workload Identity
+      azure_workload_identity_client_id = optional(string, "") # Azure: client ID for Workload Identity
+    }), {})
   })
   default = {}
 
