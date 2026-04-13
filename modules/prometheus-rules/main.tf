@@ -61,20 +61,20 @@ resource "terraform_data" "alertmanager_config" {
     command = <<-EOT
       kubectl apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
 ${templatefile("${path.module}/templates/alertmanager-config.yaml.tftpl", {
-      slack_enabled    = var.prometheus_rules.slack.enabled
-      slack_channel    = var.prometheus_rules.slack.channel
-      slack_severity_regex = local.slack_severity_regex[var.prometheus_rules.slack.min_severity]
+    slack_enabled        = var.prometheus_rules.slack.enabled
+    slack_channel        = var.prometheus_rules.slack.channel
+    slack_severity_regex = local.slack_severity_regex[var.prometheus_rules.slack.min_severity]
 
-      pagerduty_enabled        = var.prometheus_rules.pagerduty.enabled
-      pagerduty_severity_regex = local.pagerduty_severity_regex[var.prometheus_rules.pagerduty.min_severity]
+    pagerduty_enabled        = var.prometheus_rules.pagerduty.enabled
+    pagerduty_severity_regex = local.pagerduty_severity_regex[var.prometheus_rules.pagerduty.min_severity]
 
-      default_receiver = local.default_receiver
+    default_receiver = local.default_receiver
 })}
 YAML
     EOT
-  }
+}
 
-  depends_on = [terraform_data.prometheus_rule]
+depends_on = [terraform_data.prometheus_rule]
 }
 
 # Kubernetes Secrets for sensitive receiver credentials.

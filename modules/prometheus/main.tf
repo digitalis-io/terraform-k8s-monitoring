@@ -91,9 +91,9 @@ resource "kubernetes_config_map" "grafana_dashboard" {
     namespace = var.prometheus.namespace
 
     labels = {
-      grafana_dashboard                      = "1"
-      "app.kubernetes.io/managed-by"         = "terraform"
-      "app.kubernetes.io/component"          = "monitoring"
+      grafana_dashboard              = "1"
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
     }
   }
 

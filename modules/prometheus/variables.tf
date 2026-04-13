@@ -57,7 +57,7 @@ variable "prometheus" {
       gnet_id    = number
       revision   = optional(number, 1)
       datasource = optional(string, "Mimir")
-    })), [
+      })), [
       { gnet_id = 1860, revision = 37, datasource = "Mimir" }
     ])
 

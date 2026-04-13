@@ -29,9 +29,9 @@ resource "kubernetes_config_map" "grafana_rule" {
     namespace = var.grafana_rules.namespace
 
     labels = {
-      grafana_alert                          = "1"
-      "app.kubernetes.io/managed-by"         = "terraform"
-      "app.kubernetes.io/component"          = "monitoring"
+      grafana_alert                  = "1"
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
     }
   }
 
@@ -50,9 +50,9 @@ resource "kubernetes_config_map" "grafana_contact_points" {
     namespace = var.grafana_rules.namespace
 
     labels = {
-      grafana_alert                          = "1"
-      "app.kubernetes.io/managed-by"         = "terraform"
-      "app.kubernetes.io/component"          = "monitoring"
+      grafana_alert                  = "1"
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
     }
   }
 
@@ -74,11 +74,11 @@ resource "kubernetes_config_map" "grafana_contact_points" {
     })
 
     "notification-policy.yaml" = templatefile("${path.module}/templates/notification-policy.yaml.tftpl", {
-      slack_enabled    = var.grafana_rules.slack.enabled
-      slack_severity   = local.severity_regex[var.grafana_rules.slack.min_severity]
+      slack_enabled  = var.grafana_rules.slack.enabled
+      slack_severity = local.severity_regex[var.grafana_rules.slack.min_severity]
 
-      pagerduty_enabled   = var.grafana_rules.pagerduty.enabled
-      pagerduty_severity  = local.severity_regex[var.grafana_rules.pagerduty.min_severity]
+      pagerduty_enabled  = var.grafana_rules.pagerduty.enabled
+      pagerduty_severity = local.severity_regex[var.grafana_rules.pagerduty.min_severity]
 
       webhook_enabled  = var.grafana_rules.webhook.enabled
       webhook_severity = local.severity_regex[var.grafana_rules.webhook.min_severity]
