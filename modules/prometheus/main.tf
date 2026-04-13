@@ -1,4 +1,6 @@
 resource "kubernetes_namespace" "prometheus" {
+  count = var.prometheus.create_namespace ? 1 : 0
+
   metadata {
     name = var.prometheus.namespace
 
@@ -18,7 +20,7 @@ resource "helm_release" "prometheus" {
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
   version    = var.prometheus.chart_version
-  namespace  = kubernetes_namespace.prometheus.metadata[0].name
+  namespace  = var.prometheus.namespace
 
   create_namespace = false
   wait             = true

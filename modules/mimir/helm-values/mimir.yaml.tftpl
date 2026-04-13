@@ -104,19 +104,13 @@ mimir:
     limits:
       compactor_blocks_retention_period: ${retention_period}
 
-%{ if irsa_role_arn != "" || gcp_service_account_email != "" || azure_workload_identity_client_id != "" ~}
+%{ if length(service_account_annotations) > 0 ~}
 serviceAccount:
   create: true
   annotations:
-%{ if irsa_role_arn != "" ~}
-    eks.amazonaws.com/role-arn: ${irsa_role_arn}
-%{ endif ~}
-%{ if gcp_service_account_email != "" ~}
-    iam.gke.io/gcp-service-account: ${gcp_service_account_email}
-%{ endif ~}
-%{ if azure_workload_identity_client_id != "" ~}
-    azure.workload.identity/client-id: ${azure_workload_identity_client_id}
-%{ endif ~}
+%{ for key, value in service_account_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
 %{ endif ~}
 
 %{ if ingress_enabled ~}

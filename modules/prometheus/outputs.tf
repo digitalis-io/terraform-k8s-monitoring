@@ -1,6 +1,6 @@
 output "namespace" {
   description = "Kubernetes namespace where kube-prometheus-stack is deployed."
-  value       = kubernetes_namespace.prometheus.metadata[0].name
+  value       = var.prometheus.namespace
 }
 
 output "grafana_service" {

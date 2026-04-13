@@ -32,6 +32,9 @@ prometheus:
 grafana:
   enabled: ${grafana_enabled}
 %{ if grafana_enabled && mimir_datasource_url != "" ~}
+  sidecar:
+    datasources:
+      defaultDatasourceEnabled: false
   additionalDataSources:
     - name: Mimir
       type: prometheus

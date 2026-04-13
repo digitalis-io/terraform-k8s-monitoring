@@ -3,6 +3,7 @@ variable "prometheus" {
   type = object({
     chart_version        = optional(string, "75.2.0")
     namespace            = optional(string, "monitoring")
+    create_namespace     = optional(bool, true)
     grafana_enabled      = optional(bool, true)
     alertmanager_enabled = optional(bool, true)
     ingress_enabled      = optional(bool, false)

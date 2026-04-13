@@ -12,15 +12,14 @@ module "mimir" {
 }
 
 module "prometheus" {
-  source     = "../../modules/prometheus"
-  prometheus = var.prometheus
+  source = "../../modules/prometheus"
+  prometheus = merge(var.prometheus, {
+    # Mimir already created the monitoring namespace; skip re-creation.
+    create_namespace       = false
+    mimir_remote_write_url = module.mimir.remote_write_endpoint
+    mimir_datasource_url   = module.mimir.query_frontend_endpoint
+  })
 }
-
-# To connect Prometheus to a running Mimir instance, pass:
-# prometheus = {
-#   mimir_remote_write_url = module.mimir.remote_write_endpoint
-#   mimir_datasource_url   = module.mimir.query_frontend_endpoint
-# }
 
 output "remote_write_endpoint" {
   description = "Prometheus remote_write URL."

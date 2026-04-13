@@ -65,10 +65,7 @@ resource "helm_release" "mimir" {
       limits_cpu      = var.mimir.resources.limits_cpu
       limits_memory   = var.mimir.resources.limits_memory
 
-      # Workload identity / IRSA service account annotations
-      irsa_role_arn                     = var.mimir.service_account.irsa_role_arn
-      gcp_service_account_email         = var.mimir.service_account.gcp_service_account_email
-      azure_workload_identity_client_id = var.mimir.service_account.azure_workload_identity_client_id
+      service_account_annotations = var.mimir.service_account_annotations
     })
   ]
 
