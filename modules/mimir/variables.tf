@@ -3,8 +3,13 @@ variable "mimir" {
   type = object({
     chart_version    = optional(string, "5.6.0")
     namespace        = optional(string, "monitoring")
-    ingress_enabled  = optional(bool, false)
-    ingress_host     = optional(string, "")
+    ingress_enabled     = optional(bool, false)
+    ingress_host        = optional(string, "")
+    ingress_class_name  = optional(string, "nginx")
+    ingress_tls_secret  = optional(string, "")
+    ingress_annotations = optional(map(string), {
+      "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+    })
     replicas         = optional(number, 1)
     retention_period = optional(string, "30d")
 
@@ -44,6 +49,11 @@ variable "mimir" {
     }), {})
   })
   default = {}
+
+  validation {
+    condition     = !(var.mimir.ingress_enabled && var.mimir.ingress_host == "")
+    error_message = "ingress_host is required when ingress_enabled is true."
+  }
 
   validation {
     condition     = contains(["local", "s3", "gcs", "azure"], var.mimir.storage.backend)

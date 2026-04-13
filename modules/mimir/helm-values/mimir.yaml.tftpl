@@ -95,9 +95,18 @@ mimir:
 nginx:
   ingress:
     enabled: true
+    ingressClassName: ${ingress_class_name}
+    annotations:
+%{ for key, value in ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
     hosts:
       - host: ${ingress_host}
         paths:
           - path: /
             pathType: Prefix
+    tls:
+      - secretName: ${ingress_tls_secret}
+        hosts:
+          - ${ingress_host}
 %{ endif ~}

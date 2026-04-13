@@ -51,8 +51,11 @@ resource "helm_release" "mimir" {
       azure_storage_account_key    = var.mimir.storage.azure_storage_account_key
 
       # Helm chart behaviour
-      ingress_enabled  = var.mimir.ingress_enabled
-      ingress_host     = var.mimir.ingress_host
+      ingress_enabled     = var.mimir.ingress_enabled
+      ingress_host        = var.mimir.ingress_host
+      ingress_class_name  = var.mimir.ingress_class_name
+      ingress_tls_secret  = var.mimir.ingress_tls_secret != "" ? var.mimir.ingress_tls_secret : "${var.mimir.namespace}-mimir-tls"
+      ingress_annotations = var.mimir.ingress_annotations
       replicas         = var.mimir.replicas
       retention_period = var.mimir.retention_period
 
