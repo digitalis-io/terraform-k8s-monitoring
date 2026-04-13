@@ -7,43 +7,48 @@ variable "prometheus" {
     grafana_enabled      = optional(bool, true)
     alertmanager_enabled = optional(bool, true)
     grafana_ingress = optional(object({
-      enabled     = optional(bool, false)
-      host        = optional(string, "")
-      class_name  = optional(string, "traefik")
-      tls_secret  = optional(string, "")
+      enabled    = optional(bool, false)
+      host       = optional(string, "")
+      class_name = optional(string, "traefik")
+      tls_secret = optional(string, "")
       annotations = optional(map(string), {
         "cert-manager.io/cluster-issuer" = "selfsigned-cluster-issuer"
       })
     }), {})
 
     prometheus_ingress = optional(object({
-      enabled     = optional(bool, false)
-      host        = optional(string, "")
-      class_name  = optional(string, "traefik")
-      tls_secret  = optional(string, "")
+      enabled    = optional(bool, false)
+      host       = optional(string, "")
+      class_name = optional(string, "traefik")
+      tls_secret = optional(string, "")
       annotations = optional(map(string), {
         "cert-manager.io/cluster-issuer" = "selfsigned-cluster-issuer"
       })
     }), {})
 
     alertmanager_ingress = optional(object({
-      enabled     = optional(bool, false)
-      host        = optional(string, "")
-      class_name  = optional(string, "traefik")
-      tls_secret  = optional(string, "")
+      enabled    = optional(bool, false)
+      host       = optional(string, "")
+      class_name = optional(string, "traefik")
+      tls_secret = optional(string, "")
       annotations = optional(map(string), {
         "cert-manager.io/cluster-issuer" = "selfsigned-cluster-issuer"
       })
     }), {})
-    storage_size   = optional(string, "20Gi")
-    storage_class  = optional(string, "")
-    retention      = optional(string, "24h")
+    storage_size  = optional(string, "20Gi")
+    storage_class = optional(string, "")
+    retention     = optional(string, "24h")
 
     # Mimir integration — leave empty to deploy standalone (no remote_write / Grafana datasource)
     mimir_remote_write_url = optional(string, "")
     mimir_datasource_url   = optional(string, "")
     # Tenant ID for the X-Scope-OrgID header sent to Mimir. Wire from module.mimir.tenant_id.
-    mimir_tenant_id        = optional(string, "anonymous")
+    mimir_tenant_id = optional(string, "anonymous")
+
+    # Loki integration — wire from module.loki.datasource_url
+    loki_datasource_url = optional(string, "")
+    # Tempo integration — wire from module.tempo.datasource_url
+    tempo_datasource_url = optional(string, "")
 
     resources = optional(object({
       requests_cpu    = optional(string, "200m")

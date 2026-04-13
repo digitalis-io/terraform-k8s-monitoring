@@ -24,6 +24,8 @@ module "prometheus" {
     mimir_remote_write_url = module.mimir.remote_write_endpoint
     mimir_datasource_url   = module.mimir.query_frontend_endpoint
     mimir_tenant_id        = module.mimir.tenant_id
+    loki_datasource_url    = module.loki.datasource_url
+    tempo_datasource_url   = module.tempo.datasource_url
     grafana_ingress = {
       enabled = true
       host    = "grafana.${var.ingress_domain}"

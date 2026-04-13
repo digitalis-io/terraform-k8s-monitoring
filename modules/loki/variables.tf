@@ -31,8 +31,8 @@ variable "loki" {
       s3_secret_key    = optional(string, "") # leave empty to use IRSA
 
       # GCS — supply names of pre-existing buckets
-      gcs_chunks_bucket      = optional(string, "")
-      gcs_ruler_bucket       = optional(string, "")
+      gcs_chunks_bucket       = optional(string, "")
+      gcs_ruler_bucket        = optional(string, "")
       gcs_service_account_key = optional(string, "") # leave empty to use Workload Identity
 
       # Azure — supply names of pre-existing containers

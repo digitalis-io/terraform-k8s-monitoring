@@ -14,7 +14,7 @@ variable "otel" {
     image = optional(object({
       # contrib includes prometheusremotewrite and loki exporters required for Mimir/Loki forwarding
       repository  = optional(string, "otel/opentelemetry-collector-contrib")
-      tag         = optional(string, "")   # empty = chart appVersion
+      tag         = optional(string, "") # empty = chart appVersion
       pull_policy = optional(string, "IfNotPresent")
     }), {})
 

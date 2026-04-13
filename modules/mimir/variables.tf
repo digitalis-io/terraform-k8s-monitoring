@@ -1,12 +1,12 @@
 variable "mimir" {
   description = "Grafana Mimir configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version    = optional(string, "5.6.0")
-    namespace        = optional(string, "monitoring")
-    ingress_enabled     = optional(bool, false)
-    ingress_host        = optional(string, "")
-    ingress_class_name  = optional(string, "nginx")
-    ingress_tls_secret  = optional(string, "")
+    chart_version      = optional(string, "5.6.0")
+    namespace          = optional(string, "monitoring")
+    ingress_enabled    = optional(bool, false)
+    ingress_host       = optional(string, "")
+    ingress_class_name = optional(string, "nginx")
+    ingress_tls_secret = optional(string, "")
     ingress_annotations = optional(map(string), {
       "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
     })
@@ -15,7 +15,7 @@ variable "mimir" {
     # Tenant ID sent in X-Scope-OrgID header by all clients (Prometheus, Grafana).
     # "anonymous" works with multi-tenancy enabled and requires no extra config.
     # Set to a custom value to isolate metrics by team/environment.
-    tenant_id        = optional(string, "anonymous")
+    tenant_id = optional(string, "anonymous")
 
     resources = optional(object({
       requests_cpu    = optional(string, "100m")
@@ -39,10 +39,10 @@ variable "mimir" {
       s3_secret_key          = optional(string, "") # leave empty to use IRSA
 
       # GCS — supply names of pre-existing buckets
-      gcs_blocks_bucket            = optional(string, "")
-      gcs_ruler_bucket             = optional(string, "")
-      gcs_alertmanager_bucket      = optional(string, "")
-      gcs_service_account_key      = optional(string, "") # leave empty to use Workload Identity
+      gcs_blocks_bucket       = optional(string, "")
+      gcs_ruler_bucket        = optional(string, "")
+      gcs_alertmanager_bucket = optional(string, "")
+      gcs_service_account_key = optional(string, "") # leave empty to use Workload Identity
 
       # Azure — supply names of pre-existing containers
       azure_storage_account        = optional(string, "")

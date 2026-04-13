@@ -56,8 +56,8 @@ resource "helm_release" "mimir" {
       ingress_class_name  = var.mimir.ingress_class_name
       ingress_tls_secret  = var.mimir.ingress_tls_secret != "" ? var.mimir.ingress_tls_secret : "${var.mimir.namespace}-mimir-tls"
       ingress_annotations = var.mimir.ingress_annotations
-      replicas         = var.mimir.replicas
-      retention_period = var.mimir.retention_period
+      replicas            = var.mimir.replicas
+      retention_period    = var.mimir.retention_period
 
       # Resource requests/limits
       requests_cpu    = var.mimir.resources.requests_cpu

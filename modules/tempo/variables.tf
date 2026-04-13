@@ -6,9 +6,9 @@ variable "tempo" {
     create_namespace = optional(bool, true)
     # "monolithic"   — single tempo process (default, good for dev/blog)
     # "distributed"  — separate ingester, distributor, querier, compactor, etc.
-    deployment_mode  = optional(string, "monolithic")
-    replicas         = optional(number, 1)
-    retention        = optional(string, "720h") # 30 days
+    deployment_mode = optional(string, "monolithic")
+    replicas        = optional(number, 1)
+    retention       = optional(string, "720h") # 30 days
 
     resources = optional(object({
       requests_cpu    = optional(string, "100m")

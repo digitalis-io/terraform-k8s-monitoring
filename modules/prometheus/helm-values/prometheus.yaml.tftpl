@@ -48,11 +48,12 @@ prometheus:
 
 grafana:
   enabled: ${grafana_enabled}
-%{ if grafana_enabled && mimir_datasource_url != "" ~}
+%{ if grafana_enabled && (mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "") ~}
   sidecar:
     datasources:
       defaultDatasourceEnabled: false
   additionalDataSources:
+%{ if mimir_datasource_url != "" ~}
     - name: Mimir
       type: prometheus
       url: ${mimir_datasource_url}
@@ -63,6 +64,32 @@ grafana:
         httpHeaderName1: "X-Scope-OrgID"
       secureJsonData:
         httpHeaderValue1: "${mimir_tenant_id}"
+%{ endif ~}
+%{ if loki_datasource_url != "" ~}
+    - name: Loki
+      type: loki
+      uid: loki
+      url: ${loki_datasource_url}
+      access: proxy
+      isDefault: false
+%{ endif ~}
+%{ if tempo_datasource_url != "" ~}
+    - name: Tempo
+      type: tempo
+      url: ${tempo_datasource_url}
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+%{ if loki_datasource_url != "" ~}
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1h"
+          spanEndTimeShift: "1h"
+          filterByTraceID: true
+          filterBySpanID: false
+%{ endif ~}
+%{ endif ~}
 %{ endif ~}
 %{ if grafana_ingress_enabled ~}
   ingress:
