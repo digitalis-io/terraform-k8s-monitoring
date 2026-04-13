@@ -45,8 +45,9 @@ func TestMimirLocalStoragePathsDoNotOverlap(t *testing.T) {
 }
 
 // TestMimirTemplateHasServiceAccountAnnotations verifies that the Helm values
-// template supports injecting cloud-provider service account annotations
-// (IRSA for AWS, Workload Identity for GCP/Azure) onto Mimir's service accounts.
+// template renders serviceAccount annotations from the service_account_annotations
+// map. Users supply IRSA / Workload Identity annotations directly; the module
+// does not create any IAM resources.
 func TestMimirTemplateHasServiceAccountAnnotations(t *testing.T) {
 	t.Parallel()
 
@@ -55,9 +56,11 @@ func TestMimirTemplateHasServiceAccountAnnotations(t *testing.T) {
 
 	tmpl := string(content)
 	assert.Contains(t, tmpl, "serviceAccount", "template must configure Mimir service account")
-	assert.Contains(t, tmpl, "irsa_role_arn", "template must support AWS IRSA annotation")
-	assert.Contains(t, tmpl, "gcp_service_account_email", "template must support GCP Workload Identity annotation")
-	assert.Contains(t, tmpl, "azure_workload_identity_client_id", "template must support Azure Workload Identity annotation")
+	assert.Contains(t, tmpl, "service_account_annotations", "template must iterate over service_account_annotations map")
+
+	vars, err := os.ReadFile("../modules/mimir/variables.tf")
+	require.NoError(t, err, "variables.tf must exist")
+	assert.Contains(t, string(vars), "service_account_annotations", "variables.tf must declare service_account_annotations")
 }
 
 // TestMimirIngressTemplateHasTLS verifies that the Helm values template includes

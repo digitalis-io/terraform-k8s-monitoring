@@ -1,4 +1,4 @@
-# Minimal example: Mimir with local-disk storage.
+# Minimal example: Mimir with local-disk storage + kube-prometheus-stack.
 # No cloud credentials required — data is stored on the pod's local filesystem.
 # Suitable for development and blog-post walkthroughs.
 #
@@ -11,6 +11,17 @@ module "mimir" {
   mimir  = var.mimir
 }
 
+module "prometheus" {
+  source     = "../../modules/prometheus"
+  prometheus = var.prometheus
+}
+
+# To connect Prometheus to a running Mimir instance, pass:
+# prometheus = {
+#   mimir_remote_write_url = module.mimir.remote_write_endpoint
+#   mimir_datasource_url   = module.mimir.query_frontend_endpoint
+# }
+
 output "remote_write_endpoint" {
   description = "Prometheus remote_write URL."
   value       = module.mimir.remote_write_endpoint
@@ -19,4 +30,9 @@ output "remote_write_endpoint" {
 output "query_frontend_endpoint" {
   description = "Grafana datasource URL."
   value       = module.mimir.query_frontend_endpoint
+}
+
+output "grafana_service" {
+  description = "In-cluster Grafana service URL."
+  value       = module.prometheus.grafana_service
 }

@@ -1,0 +1,61 @@
+prometheus:
+  prometheusSpec:
+    retention: ${retention}
+    enableRemoteWriteReceiver: true
+%{ if mimir_remote_write_url != "" ~}
+    remoteWrite:
+      - url: ${mimir_remote_write_url}
+        name: mimir
+%{ endif ~}
+    resources:
+      requests:
+        cpu: ${requests_cpu}
+        memory: ${requests_memory}
+      limits:
+        cpu: ${limits_cpu}
+        memory: ${limits_memory}
+    storageSpec:
+%{ if storage_size != "" ~}
+      volumeClaimTemplate:
+        spec:
+%{ if storage_class != "" ~}
+          storageClassName: ${storage_class}
+%{ endif ~}
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: ${storage_size}
+%{ else ~}
+      emptyDir: {}
+%{ endif ~}
+
+grafana:
+  enabled: ${grafana_enabled}
+%{ if grafana_enabled && mimir_datasource_url != "" ~}
+  additionalDataSources:
+    - name: Mimir
+      type: prometheus
+      url: ${mimir_datasource_url}
+      access: proxy
+      isDefault: true
+      jsonData:
+        timeInterval: 60s
+%{ endif ~}
+%{ if ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${ingress_class_name}
+    annotations:
+%{ for key, value in ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${ingress_host}
+    tls:
+      - secretName: ${ingress_tls_secret}
+        hosts:
+          - ${ingress_host}
+%{ endif ~}
+
+alertmanager:
+  enabled: ${alertmanager_enabled}

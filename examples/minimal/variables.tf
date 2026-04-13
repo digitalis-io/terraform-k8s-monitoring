@@ -3,3 +3,9 @@ variable "mimir" {
   type        = any
   default     = {}
 }
+
+variable "prometheus" {
+  description = "Prometheus configuration passed through to the module."
+  type        = any
+  default     = {}
+}
