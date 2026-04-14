@@ -20,9 +20,14 @@ tempo:
 %{ if s3_path_style ~}
         forcepathstyle: true
 %{ endif ~}
+%{ if use_s3_secret ~}
+        access_key: $${AWS_ACCESS_KEY_ID}
+        secret_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
 %{ if s3_access_key != "" ~}
         access_key: ${s3_access_key}
         secret_key: ${s3_secret_key}
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
@@ -43,60 +48,42 @@ tempo:
 %{ endif ~}
 %{ endif ~}
 
-  # Enable OTLP receivers
-  receivers:
-    otlp:
-      protocols:
-        grpc:
-          endpoint: "0.0.0.0:4317"
-        http:
-          endpoint: "0.0.0.0:4318"
+traces:
+  otlp:
+    http:
+      enabled: true
+    grpc:
+      enabled: true
 
-# Deployment mode
-%{ if deployment_mode == "monolithic" ~}
-ingester:
-  replicas: 0
-distributor:
-  replicas: 0
-compactor:
-  replicas: 0
-querier:
-  replicas: 0
-queryFrontend:
-  replicas: 0
 metricsGenerator:
   enabled: false
 
 gateway:
   enabled: false
 
-traces:
-  otlp:
-    http:
-      enabled: true
-    grpc:
-      enabled: true
-
-# Run everything in a single container
-tempo:
+ingester:
   replicas: ${replicas}
-  resources:
-    requests:
-      cpu: ${requests_cpu}
-      memory: ${requests_memory}
-    limits:
-      cpu: ${limits_cpu}
-      memory: ${limits_memory}
 %{ if storage_backend == "local" ~}
+  config:
+    replication_factor: 1
   persistence:
     enabled: true
     size: 10Gi
     storageClass: ""
 %{ endif ~}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
 %{ endif ~}
-%{ if deployment_mode == "distributed" ~}
-ingester:
-  replicas: ${replicas}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -104,8 +91,22 @@ ingester:
     limits:
       cpu: ${limits_cpu}
       memory: ${limits_memory}
+
 distributor:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -113,8 +114,22 @@ distributor:
     limits:
       cpu: ${limits_cpu}
       memory: ${limits_memory}
+
 compactor:
   replicas: 1
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -122,8 +137,22 @@ compactor:
     limits:
       cpu: ${limits_cpu}
       memory: ${limits_memory}
+
 querier:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -131,8 +160,22 @@ querier:
     limits:
       cpu: ${limits_cpu}
       memory: ${limits_memory}
+
 queryFrontend:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -140,17 +183,6 @@ queryFrontend:
     limits:
       cpu: ${limits_cpu}
       memory: ${limits_memory}
-
-gateway:
-  enabled: true
-
-traces:
-  otlp:
-    http:
-      enabled: true
-    grpc:
-      enabled: true
-%{ endif ~}
 
 %{ if length(service_account_annotations) > 0 ~}
 serviceAccount:

@@ -1,17 +1,55 @@
+locals {
+  tempo_create_s3_secret = (
+    var.tempo.storage.backend == "s3" &&
+    var.tempo.storage.s3_credentials_secret == null &&
+    var.tempo.storage.s3_access_key != ""
+  )
+
+  tempo_s3_secret = (
+    var.tempo.storage.s3_credentials_secret != null ? var.tempo.storage.s3_credentials_secret :
+    local.tempo_create_s3_secret ? {
+      name             = "tempo-s3-credentials"
+      access_key_field = "access-key"
+      secret_key_field = "secret-key"
+    } : null
+  )
+}
+
+resource "kubernetes_secret" "tempo_s3_credentials" {
+  count = local.tempo_create_s3_secret ? 1 : 0
+
+  metadata {
+    name      = "tempo-s3-credentials"
+    namespace = var.tempo.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    "access-key" = var.tempo.storage.s3_access_key
+    "secret-key"  = var.tempo.storage.s3_secret_key
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.tempo]
+}
+
 resource "kubernetes_namespace" "tempo" {
   count = var.tempo.create_namespace ? 1 : 0
 
   metadata {
     name = var.tempo.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "monitoring"
-    }
+    }, var.tempo.namespace_labels)
 
-    annotations = {
-      "linkerd.io/inject" = "disabled"
-    }
+    annotations = merge({
+    }, var.tempo.namespace_annotations)
   }
 }
 
@@ -37,8 +75,12 @@ resource "helm_release" "tempo" {
       s3_endpoint   = var.tempo.storage.s3_endpoint
       s3_insecure   = var.tempo.storage.s3_insecure
       s3_path_style = var.tempo.storage.s3_path_style
-      s3_access_key = var.tempo.storage.s3_access_key
-      s3_secret_key = var.tempo.storage.s3_secret_key
+      s3_access_key      = var.tempo.storage.s3_access_key
+      s3_secret_key      = var.tempo.storage.s3_secret_key
+      use_s3_secret      = local.tempo_s3_secret != null
+      s3_secret_name     = local.tempo_s3_secret != null ? local.tempo_s3_secret.name : ""
+      s3_secret_ak_field = local.tempo_s3_secret != null ? local.tempo_s3_secret.access_key_field : ""
+      s3_secret_sk_field = local.tempo_s3_secret != null ? local.tempo_s3_secret.secret_key_field : ""
 
       # GCS
       gcs_bucket              = var.tempo.storage.gcs_bucket
@@ -50,9 +92,8 @@ resource "helm_release" "tempo" {
       azure_storage_account_key = var.tempo.storage.azure_storage_account_key
 
       # Helm chart behaviour
-      deployment_mode = var.tempo.deployment_mode
-      replicas        = var.tempo.replicas
-      retention       = var.tempo.retention
+      replicas  = var.tempo.replicas
+      retention = var.tempo.retention
 
       # Resource requests/limits
       requests_cpu    = var.tempo.resources.requests_cpu
@@ -64,5 +105,5 @@ resource "helm_release" "tempo" {
     })
   ]
 
-  depends_on = [kubernetes_namespace.tempo]
+  depends_on = [kubernetes_namespace.tempo, kubernetes_secret.tempo_s3_credentials]
 }
