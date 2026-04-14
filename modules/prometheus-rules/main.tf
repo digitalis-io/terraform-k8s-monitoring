@@ -34,7 +34,7 @@ resource "terraform_data" "prometheus_rule" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      kubectl apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
+      kubectl --kubeconfig=${var.prometheus_rules.kubeconfig_path != "" ? var.prometheus_rules.kubeconfig_path : "$HOME/.kube/config"} apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
 ${each.value}
 YAML
     EOT
@@ -59,7 +59,7 @@ resource "terraform_data" "alertmanager_config" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      kubectl apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
+      kubectl --kubeconfig=${var.prometheus_rules.kubeconfig_path != "" ? var.prometheus_rules.kubeconfig_path : "$HOME/.kube/config"} apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
 ${templatefile("${path.module}/templates/alertmanager-config.yaml.tftpl", {
     slack_enabled        = var.prometheus_rules.slack.enabled
     slack_channel        = var.prometheus_rules.slack.channel

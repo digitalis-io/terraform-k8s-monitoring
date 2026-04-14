@@ -4,10 +4,12 @@ resource "kubernetes_namespace" "cert_manager" {
   metadata {
     name = var.cert_manager.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "cert-manager"
-    }
+    }, var.cert_manager.namespace_labels)
+
+    annotations = var.cert_manager.namespace_annotations
   }
 }
 
@@ -39,7 +41,7 @@ resource "terraform_data" "cluster_issuer" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      kubectl apply -f - <<'YAML'
+      kubectl --kubeconfig=${var.cert_manager.kubeconfig_path != "" ? var.cert_manager.kubeconfig_path : "$HOME/.kube/config"} apply -f - <<'YAML'
       apiVersion: cert-manager.io/v1
       kind: ClusterIssuer
       metadata:

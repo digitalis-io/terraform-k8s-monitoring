@@ -4,6 +4,10 @@ variable "prometheus_rules" {
     # Namespace must match where kube-prometheus-stack is deployed.
     namespace = optional(string, "monitoring")
 
+    # Path to the kubeconfig file used by kubectl in local-exec provisioners.
+    # Defaults to ~/.kube/config. Set explicitly to avoid KUBECONFIG env var interference.
+    kubeconfig_path = optional(string, "")
+
     # Output from module.prometheus.helm_release_id — enforces apply order so
     # PrometheusRule and AlertmanagerConfig CRDs exist before kubectl apply runs.
     prometheus_release_id = string
