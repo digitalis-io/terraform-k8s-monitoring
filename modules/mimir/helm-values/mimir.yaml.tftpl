@@ -20,6 +20,9 @@ mimir:
         dir: /data/blocks
 %{ endif ~}
 %{ if storage_backend == "s3" ~}
+%{ if s3_blocks_prefix != "" ~}
+      storage_prefix: ${s3_blocks_prefix}
+%{ endif ~}
       s3:
         bucket_name: ${s3_blocks_bucket}
         region: ${s3_region}
@@ -28,13 +31,16 @@ mimir:
         insecure: ${s3_insecure}
 %{ endif ~}
 %{ if s3_path_style ~}
-        http:
-          insecure_skip_verify: false
-        path_style_access: true
+        bucket_lookup_type: path
 %{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}
         secret_access_key: ${s3_secret_key}
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
@@ -57,6 +63,9 @@ mimir:
         dir: /data/alertmanager
 %{ endif ~}
 %{ if storage_backend == "s3" ~}
+%{ if s3_alertmanager_prefix != "" ~}
+      storage_prefix: ${s3_alertmanager_prefix}
+%{ endif ~}
       s3:
         bucket_name: ${s3_alertmanager_bucket}
         region: ${s3_region}
@@ -65,11 +74,16 @@ mimir:
         insecure: ${s3_insecure}
 %{ endif ~}
 %{ if s3_path_style ~}
-        path_style_access: true
+        bucket_lookup_type: path
 %{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}
         secret_access_key: ${s3_secret_key}
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
@@ -89,6 +103,9 @@ mimir:
         dir: /data/ruler
 %{ endif ~}
 %{ if storage_backend == "s3" ~}
+%{ if s3_ruler_prefix != "" ~}
+      storage_prefix: ${s3_ruler_prefix}
+%{ endif ~}
       s3:
         bucket_name: ${s3_ruler_bucket}
         region: ${s3_region}
@@ -97,11 +114,16 @@ mimir:
         insecure: ${s3_insecure}
 %{ endif ~}
 %{ if s3_path_style ~}
-        path_style_access: true
+        bucket_lookup_type: path
 %{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}
         secret_access_key: ${s3_secret_key}
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
@@ -117,6 +139,15 @@ mimir:
     limits:
       compactor_blocks_retention_period: ${retention_period}
 
+    usage_stats:
+      enabled: false
+
+# Disable the chart's bundled MinIO — we use external object storage.
+# Without this, the chart injects MinIO-based S3 configs for usage-stats
+# and other modules that conflict with our external S3 configuration.
+minio:
+  enabled: false
+
 %{ if length(service_account_annotations) > 0 ~}
 serviceAccount:
   create: true
@@ -124,6 +155,21 @@ serviceAccount:
 %{ for key, value in service_account_annotations ~}
     ${key}: "${value}"
 %{ endfor ~}
+%{ endif ~}
+
+%{ if use_s3_secret ~}
+global:
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
 %{ endif ~}
 
 %{ if ingress_enabled ~}

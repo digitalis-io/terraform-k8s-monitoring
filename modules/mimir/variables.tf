@@ -35,12 +35,26 @@ variable "mimir" {
       s3_blocks_bucket       = optional(string, "")
       s3_ruler_bucket        = optional(string, "")
       s3_alertmanager_bucket = optional(string, "")
+      # Optional object key prefix — allows sharing one bucket across components.
+      # Each storage type must use a distinct prefix (e.g. "blocks", "ruler", "alertmanager").
+      s3_blocks_prefix       = optional(string, "")
+      s3_ruler_prefix        = optional(string, "")
+      s3_alertmanager_prefix = optional(string, "")
       s3_region              = optional(string, "")
       s3_endpoint            = optional(string, "")  # override for S3-compatible endpoints (Hetzner, MinIO, Ceph, etc.)
       s3_insecure            = optional(bool, false) # set true for HTTP-only endpoints
       s3_path_style          = optional(bool, false) # set true for non-AWS S3 (Hetzner, MinIO, Ceph require this)
-      s3_access_key          = optional(string, "")  # leave empty to use IRSA
-      s3_secret_key          = optional(string, "")  # leave empty to use IRSA
+      s3_access_key          = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
+      s3_secret_key          = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
+      # Reference a pre-existing Kubernetes Secret containing S3 credentials.
+      # When set, the module injects credentials as env vars rather than embedding them in Helm values.
+      # Mutually exclusive with s3_access_key / s3_secret_key.
+      # To share one secret across Mimir, Loki, and Tempo, pass the same name to all three modules.
+      s3_credentials_secret = optional(object({
+        name             = string
+        access_key_field = optional(string, "access-key")
+        secret_key_field = optional(string, "secret-key")
+      }), null)
 
       # GCS — supply names of pre-existing buckets
       gcs_blocks_bucket       = optional(string, "")

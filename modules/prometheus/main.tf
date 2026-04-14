@@ -10,7 +10,6 @@ resource "kubernetes_namespace" "prometheus" {
     }, var.prometheus.namespace_labels)
 
     annotations = merge({
-      "linkerd.io/inject" = "disabled"
     }, var.prometheus.namespace_annotations)
   }
 }

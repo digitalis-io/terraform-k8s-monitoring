@@ -1,3 +1,44 @@
+locals {
+  # True when the module should create a Kubernetes Secret from the supplied plain-text keys.
+  mimir_create_s3_secret = (
+    var.mimir.storage.backend == "s3" &&
+    var.mimir.storage.s3_credentials_secret == null &&
+    var.mimir.storage.s3_access_key != ""
+  )
+
+  # Resolved secret reference — external (caller-supplied) or module-managed.
+  mimir_s3_secret = (
+    var.mimir.storage.s3_credentials_secret != null ? var.mimir.storage.s3_credentials_secret :
+    local.mimir_create_s3_secret ? {
+      name             = "mimir-s3-credentials"
+      access_key_field = "access-key"
+      secret_key_field = "secret-key"
+    } : null
+  )
+}
+
+resource "kubernetes_secret" "mimir_s3_credentials" {
+  count = local.mimir_create_s3_secret ? 1 : 0
+
+  metadata {
+    name      = "mimir-s3-credentials"
+    namespace = var.mimir.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    "access-key" = var.mimir.storage.s3_access_key
+    "secret-key" = var.mimir.storage.s3_secret_key
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.mimir]
+}
+
 resource "kubernetes_namespace" "mimir" {
   metadata {
     name = var.mimir.namespace
@@ -8,7 +49,6 @@ resource "kubernetes_namespace" "mimir" {
     }, var.mimir.namespace_labels)
 
     annotations = merge({
-      "linkerd.io/inject" = "disabled"
     }, var.mimir.namespace_annotations)
   }
 }
@@ -33,12 +73,20 @@ resource "helm_release" "mimir" {
       s3_blocks_bucket       = var.mimir.storage.s3_blocks_bucket
       s3_ruler_bucket        = var.mimir.storage.s3_ruler_bucket
       s3_alertmanager_bucket = var.mimir.storage.s3_alertmanager_bucket
+      s3_blocks_prefix       = var.mimir.storage.s3_blocks_prefix
+      s3_ruler_prefix        = var.mimir.storage.s3_ruler_prefix
+      s3_alertmanager_prefix = var.mimir.storage.s3_alertmanager_prefix
       s3_region              = var.mimir.storage.s3_region
-      s3_endpoint            = var.mimir.storage.s3_endpoint
+      # MinIO SDK prepends https:// itself — strip any scheme the caller may have included.
+      s3_endpoint            = replace(replace(var.mimir.storage.s3_endpoint, "https://", ""), "http://", "")
       s3_insecure            = var.mimir.storage.s3_insecure
       s3_path_style          = var.mimir.storage.s3_path_style
       s3_access_key          = var.mimir.storage.s3_access_key
       s3_secret_key          = var.mimir.storage.s3_secret_key
+      use_s3_secret          = local.mimir_s3_secret != null
+      s3_secret_name         = local.mimir_s3_secret != null ? local.mimir_s3_secret.name : ""
+      s3_secret_ak_field     = local.mimir_s3_secret != null ? local.mimir_s3_secret.access_key_field : ""
+      s3_secret_sk_field     = local.mimir_s3_secret != null ? local.mimir_s3_secret.secret_key_field : ""
 
       # GCS
       gcs_blocks_bucket       = var.mimir.storage.gcs_blocks_bucket
@@ -71,5 +119,5 @@ resource "helm_release" "mimir" {
     })
   ]
 
-  depends_on = [kubernetes_namespace.mimir]
+  depends_on = [kubernetes_namespace.mimir, kubernetes_secret.mimir_s3_credentials]
 }

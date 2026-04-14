@@ -31,9 +31,14 @@ loki:
 %{ if s3_path_style ~}
       s3ForcePathStyle: true
 %{ endif ~}
+%{ if use_s3_secret ~}
+      accessKeyId: $${AWS_ACCESS_KEY_ID}
+      secretAccessKey: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
 %{ if s3_access_key != "" ~}
       accessKeyId: ${s3_access_key}
       secretAccessKey: ${s3_secret_key}
+%{ endif ~}
 %{ endif ~}
     bucketNames:
       chunks: ${s3_chunks_bucket}
@@ -64,6 +69,19 @@ loki:
 %{ if deployment_mode == "single-binary" ~}
 singleBinary:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -89,6 +107,19 @@ singleBinary:
   replicas: 0
 read:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -98,6 +129,19 @@ read:
       memory: ${limits_memory}
 write:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}
@@ -107,6 +151,19 @@ write:
       memory: ${limits_memory}
 backend:
   replicas: ${replicas}
+%{ if use_s3_secret ~}
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
   resources:
     requests:
       cpu: ${requests_cpu}

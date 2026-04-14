@@ -1,3 +1,42 @@
+locals {
+  loki_create_s3_secret = (
+    var.loki.storage.backend == "s3" &&
+    var.loki.storage.s3_credentials_secret == null &&
+    var.loki.storage.s3_access_key != ""
+  )
+
+  loki_s3_secret = (
+    var.loki.storage.s3_credentials_secret != null ? var.loki.storage.s3_credentials_secret :
+    local.loki_create_s3_secret ? {
+      name             = "loki-s3-credentials"
+      access_key_field = "access-key"
+      secret_key_field = "secret-key"
+    } : null
+  )
+}
+
+resource "kubernetes_secret" "loki_s3_credentials" {
+  count = local.loki_create_s3_secret ? 1 : 0
+
+  metadata {
+    name      = "loki-s3-credentials"
+    namespace = var.loki.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    "access-key" = var.loki.storage.s3_access_key
+    "secret-key" = var.loki.storage.s3_secret_key
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.loki]
+}
+
 resource "kubernetes_namespace" "loki" {
   count = var.loki.create_namespace ? 1 : 0
 
@@ -10,7 +49,6 @@ resource "kubernetes_namespace" "loki" {
     }, var.loki.namespace_labels)
 
     annotations = merge({
-      "linkerd.io/inject" = "disabled"
     }, var.loki.namespace_annotations)
   }
 }
@@ -32,14 +70,18 @@ resource "helm_release" "loki" {
       storage_backend = var.loki.storage.backend
 
       # S3
-      s3_chunks_bucket = var.loki.storage.s3_chunks_bucket
-      s3_ruler_bucket  = var.loki.storage.s3_ruler_bucket
-      s3_region        = var.loki.storage.s3_region
-      s3_endpoint      = var.loki.storage.s3_endpoint
-      s3_insecure      = var.loki.storage.s3_insecure
-      s3_path_style    = var.loki.storage.s3_path_style
-      s3_access_key    = var.loki.storage.s3_access_key
-      s3_secret_key    = var.loki.storage.s3_secret_key
+      s3_chunks_bucket   = var.loki.storage.s3_chunks_bucket
+      s3_ruler_bucket    = var.loki.storage.s3_ruler_bucket
+      s3_region          = var.loki.storage.s3_region
+      s3_endpoint        = replace(replace(var.loki.storage.s3_endpoint, "https://", ""), "http://", "")
+      s3_insecure        = var.loki.storage.s3_insecure
+      s3_path_style      = var.loki.storage.s3_path_style
+      s3_access_key      = var.loki.storage.s3_access_key
+      s3_secret_key      = var.loki.storage.s3_secret_key
+      use_s3_secret      = local.loki_s3_secret != null
+      s3_secret_name     = local.loki_s3_secret != null ? local.loki_s3_secret.name : ""
+      s3_secret_ak_field = local.loki_s3_secret != null ? local.loki_s3_secret.access_key_field : ""
+      s3_secret_sk_field = local.loki_s3_secret != null ? local.loki_s3_secret.secret_key_field : ""
 
       # GCS
       gcs_chunks_bucket       = var.loki.storage.gcs_chunks_bucket
@@ -67,5 +109,5 @@ resource "helm_release" "loki" {
     })
   ]
 
-  depends_on = [kubernetes_namespace.loki]
+  depends_on = [kubernetes_namespace.loki, kubernetes_secret.loki_s3_credentials]
 }

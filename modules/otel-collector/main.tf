@@ -17,7 +17,6 @@ resource "kubernetes_namespace" "otel" {
     }, var.otel.namespace_labels)
 
     annotations = merge({
-      "linkerd.io/inject" = "disabled"
     }, var.otel.namespace_annotations)
   }
 }

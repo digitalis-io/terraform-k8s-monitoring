@@ -29,7 +29,7 @@ resource "kubernetes_secret" "tempo_s3_credentials" {
 
   data = {
     "access-key" = var.tempo.storage.s3_access_key
-    "secret-key"  = var.tempo.storage.s3_secret_key
+    "secret-key" = var.tempo.storage.s3_secret_key
   }
 
   type = "Opaque"
@@ -70,11 +70,11 @@ resource "helm_release" "tempo" {
       storage_backend = var.tempo.storage.backend
 
       # S3
-      s3_bucket     = var.tempo.storage.s3_bucket
-      s3_region     = var.tempo.storage.s3_region
-      s3_endpoint   = var.tempo.storage.s3_endpoint
-      s3_insecure   = var.tempo.storage.s3_insecure
-      s3_path_style = var.tempo.storage.s3_path_style
+      s3_bucket          = var.tempo.storage.s3_bucket
+      s3_region          = var.tempo.storage.s3_region
+      s3_endpoint        = replace(replace(var.tempo.storage.s3_endpoint, "https://", ""), "http://", "")
+      s3_insecure        = var.tempo.storage.s3_insecure
+      s3_path_style      = var.tempo.storage.s3_path_style
       s3_access_key      = var.tempo.storage.s3_access_key
       s3_secret_key      = var.tempo.storage.s3_secret_key
       use_s3_secret      = local.tempo_s3_secret != null
