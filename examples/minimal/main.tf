@@ -93,7 +93,7 @@ output "otlp_grpc_endpoint" {
 module "prometheus_rules" {
   source = "../../modules/prometheus-rules"
   prometheus_rules = merge(var.prometheus_rules, {
-    namespace             = var.prometheus.namespace != null ? var.prometheus.namespace : "monitoring"
+    namespace             = try(var.prometheus.namespace, "monitoring")
     prometheus_release_id = module.prometheus.helm_release_id
   })
 }
@@ -101,6 +101,6 @@ module "prometheus_rules" {
 module "grafana_rules" {
   source = "../../modules/grafana-rules"
   grafana_rules = merge(var.grafana_rules, {
-    namespace = var.prometheus.namespace != null ? var.prometheus.namespace : "monitoring"
+    namespace = try(var.prometheus.namespace, "monitoring")
   })
 }

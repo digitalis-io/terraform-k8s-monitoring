@@ -49,5 +49,5 @@ variable "grafana_rules" {
 variable "ingress_domain" {
   description = "Domain name to use for the Ingress"
   type        = string
-  default     = "91.92.225.202.nip.io"
+  default     = ""
 }
