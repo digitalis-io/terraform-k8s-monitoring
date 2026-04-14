@@ -1,0 +1,48 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# cp terraform.tfvars.example terraform.tfvars
+
+# -- Kubernetes ----------------------------------------------------------------
+kubeconfig_path = "/home/youruser/.kube/config"  # use absolute path — tilde (~) is not expanded
+
+# -- GCP Workload Identity -----------------------------------------------------
+# Pre-create these Google Service Accounts and bind them to Kubernetes SAs:
+#
+#   # Create the GSA
+#   gcloud iam service-accounts create mimir \
+#     --display-name="Mimir storage access"
+#
+#   # Grant Storage Object Admin on the buckets
+#   gsutil iam ch serviceAccount:mimir@my-project.iam.gserviceaccount.com:objectAdmin \
+#     gs://my-project-mimir-blocks gs://my-project-mimir-ruler gs://my-project-mimir-alertmanager
+#
+#   # Bind the GSA to the Kubernetes SA via Workload Identity
+#   gcloud iam service-accounts add-iam-policy-binding \
+#     mimir@my-project.iam.gserviceaccount.com \
+#     --role roles/iam.workloadIdentityUser \
+#     --member "serviceAccount:my-project.svc.id.goog[monitoring/mimir]"
+#
+# Repeat for loki and tempo service accounts.
+
+mimir_gsa_email = "mimir@my-project.iam.gserviceaccount.com"
+loki_gsa_email  = "loki@my-project.iam.gserviceaccount.com"
+tempo_gsa_email = "tempo@my-project.iam.gserviceaccount.com"
+
+# -- Bucket names (pre-create these before terraform apply) --------------------
+mimir_blocks_bucket       = "my-project-mimir-blocks"
+mimir_ruler_bucket        = "my-project-mimir-ruler"
+mimir_alertmanager_bucket = "my-project-mimir-alertmanager"
+loki_chunks_bucket        = "my-project-loki-chunks"
+loki_ruler_bucket         = "my-project-loki-ruler"
+tempo_bucket              = "my-project-tempo-traces"
+
+# -- Optional: ingress (leave empty to skip) -----------------------------------
+# ingress_domain     = "monitoring.example.com"
+# ingress_class_name = "gce"
+# -> Grafana will be available at https://grafana.monitoring.example.com
+
+# -- Optional: Slack alerts (leave empty to skip) ------------------------------
+# slack_webhook_url = "https://hooks.slack.com/services/T000/B000/xxxx"
+# slack_channel     = "#alerts"
+
+# -- Optional: PagerDuty alerts (leave empty to skip) --------------------------
+# pagerduty_routing_key = "your-pagerduty-events-v2-routing-key"

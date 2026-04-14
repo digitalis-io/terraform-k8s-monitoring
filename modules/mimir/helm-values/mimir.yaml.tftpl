@@ -1,0 +1,193 @@
+mimir:
+  structuredConfig:
+    # These are local working directories used at runtime by each component.
+    # They must not overlap with any storage path — chart defaults (/data) conflict
+    # with the filesystem storage dirs defined below.
+    ruler:
+      rule_path: /data/ruler-tmp
+    alertmanager:
+      data_dir: /data/alertmanager-tmp
+    compactor:
+      data_dir: /data/compactor-tmp
+    # blocks_storage.tsdb.dir is the ingester's local TSDB working directory.
+    # It must be distinct from blocks_storage.filesystem.dir (the completed-blocks store).
+    blocks_storage:
+      tsdb:
+        dir: /data/tsdb
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/blocks
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+%{ if s3_blocks_prefix != "" ~}
+      storage_prefix: ${s3_blocks_prefix}
+%{ endif ~}
+      s3:
+        bucket_name: ${s3_blocks_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        bucket_lookup_type: path
+%{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_blocks_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_blocks_container}
+%{ if azure_storage_account_key != "" ~}
+        account_key: ${azure_storage_account_key}
+%{ endif ~}
+%{ endif ~}
+
+    alertmanager_storage:
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/alertmanager
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+%{ if s3_alertmanager_prefix != "" ~}
+      storage_prefix: ${s3_alertmanager_prefix}
+%{ endif ~}
+      s3:
+        bucket_name: ${s3_alertmanager_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        bucket_lookup_type: path
+%{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_alertmanager_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_alertmanager_container}
+%{ endif ~}
+
+    ruler_storage:
+      backend: ${storage_backend == "local" ? "filesystem" : storage_backend}
+%{ if storage_backend == "local" ~}
+      filesystem:
+        dir: /data/ruler
+%{ endif ~}
+%{ if storage_backend == "s3" ~}
+%{ if s3_ruler_prefix != "" ~}
+      storage_prefix: ${s3_ruler_prefix}
+%{ endif ~}
+      s3:
+        bucket_name: ${s3_ruler_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        bucket_lookup_type: path
+%{ endif ~}
+%{ if use_s3_secret ~}
+        access_key_id: $${AWS_ACCESS_KEY_ID}
+        secret_access_key: $${AWS_SECRET_ACCESS_KEY}
+%{ else ~}
+%{ if s3_access_key != "" ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_ruler_bucket}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_ruler_container}
+%{ endif ~}
+
+    limits:
+      compactor_blocks_retention_period: ${retention_period}
+
+    usage_stats:
+      enabled: false
+
+# Disable the chart's bundled MinIO — we use external object storage.
+# Without this, the chart injects MinIO-based S3 configs for usage-stats
+# and other modules that conflict with our external S3 configuration.
+minio:
+  enabled: false
+
+%{ if length(service_account_annotations) > 0 ~}
+serviceAccount:
+  create: true
+  annotations:
+%{ for key, value in service_account_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+
+%{ if use_s3_secret ~}
+global:
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
+
+%{ if ingress_enabled ~}
+nginx:
+  ingress:
+    enabled: true
+    ingressClassName: ${ingress_class_name}
+    annotations:
+%{ for key, value in ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - host: ${ingress_host}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: ${ingress_tls_secret}
+        hosts:
+          - ${ingress_host}
+%{ endif ~}

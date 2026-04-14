@@ -1,0 +1,48 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: default-receiver
+    receivers:
+%{ if slack_enabled ~}
+      - uid: contact-point-slack
+        type: slack
+        settings:
+          url: ${slack_webhook_url}
+          recipient: '${slack_channel}'
+          mentionChannel: here
+          title: |
+            [{{ "{{" }} .Status | toUpper {{ "}}" }}{{ "{{" }} if eq .Status "firing" {{ "}}" }}:{{ "{{" }} .Alerts.Firing | len {{ "}}" }}{{ "{{" }} end {{ "}}" }}] {{ "{{" }} .CommonLabels.alertname {{ "}}" }}
+          text: |
+            {{ "{{" }} range .Alerts {{ "}}" }}*Alert:* {{ "{{" }} .Annotations.summary {{ "}}" }}
+            *Severity:* `{{ "{{" }} .Labels.severity {{ "}}" }}`
+            *Namespace:* `{{ "{{" }} .Labels.namespace {{ "}}" }}`
+            {{ "{{" }} if .Annotations.description {{ "}}" }}*Details:* {{ "{{" }} .Annotations.description {{ "}}" }}{{ "{{" }} end {{ "}}" }}
+            {{ "{{" }} end {{ "}}" }}
+        disableResolveMessage: false
+%{ endif ~}
+%{ if pagerduty_enabled ~}
+      - uid: contact-point-pagerduty
+        type: pagerduty
+        settings:
+          integrationKey: ${pagerduty_integration_key}
+          severity: '{{ "{{" }} .CommonLabels.severity {{ "}}" }}'
+          summary: '{{ "{{" }} .CommonAnnotations.summary {{ "}}" }}'
+          details: '{{ "{{" }} .CommonAnnotations.description {{ "}}" }}'
+        disableResolveMessage: false
+%{ endif ~}
+%{ if webhook_enabled ~}
+      - uid: contact-point-webhook
+        type: webhook
+        settings:
+          url: ${webhook_url}
+          httpMethod: ${webhook_http_method}
+        disableResolveMessage: false
+%{ endif ~}
+%{ if email_enabled ~}
+      - uid: contact-point-email
+        type: email
+        settings:
+          addresses: ${email_addresses}
+          singleEmail: false
+        disableResolveMessage: false
+%{ endif ~}

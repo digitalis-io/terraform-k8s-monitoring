@@ -1,0 +1,113 @@
+locals {
+  loki_create_s3_secret = (
+    var.loki.storage.backend == "s3" &&
+    var.loki.storage.s3_credentials_secret == null &&
+    var.loki.storage.s3_access_key != ""
+  )
+
+  loki_s3_secret = (
+    var.loki.storage.s3_credentials_secret != null ? var.loki.storage.s3_credentials_secret :
+    local.loki_create_s3_secret ? {
+      name             = "loki-s3-credentials"
+      access_key_field = "access-key"
+      secret_key_field = "secret-key"
+    } : null
+  )
+}
+
+resource "kubernetes_secret" "loki_s3_credentials" {
+  count = local.loki_create_s3_secret ? 1 : 0
+
+  metadata {
+    name      = "loki-s3-credentials"
+    namespace = var.loki.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    "access-key" = var.loki.storage.s3_access_key
+    "secret-key" = var.loki.storage.s3_secret_key
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.loki]
+}
+
+resource "kubernetes_namespace" "loki" {
+  count = var.loki.create_namespace ? 1 : 0
+
+  metadata {
+    name = var.loki.namespace
+
+    labels = merge({
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }, var.loki.namespace_labels)
+
+    annotations = merge({
+    }, var.loki.namespace_annotations)
+  }
+}
+
+resource "helm_release" "loki" {
+  name       = "loki"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "loki"
+  version    = var.loki.chart_version
+  namespace  = var.loki.namespace
+
+  create_namespace = false
+  wait             = true
+  wait_for_jobs    = true
+  timeout          = 600
+
+  values = [
+    templatefile("${path.module}/helm-values/loki.yaml.tftpl", {
+      storage_backend = var.loki.storage.backend
+
+      # S3
+      s3_chunks_bucket   = var.loki.storage.s3_chunks_bucket
+      s3_ruler_bucket    = var.loki.storage.s3_ruler_bucket
+      s3_region          = var.loki.storage.s3_region
+      s3_endpoint        = replace(replace(var.loki.storage.s3_endpoint, "https://", ""), "http://", "")
+      s3_insecure        = var.loki.storage.s3_insecure
+      s3_path_style      = var.loki.storage.s3_path_style
+      s3_access_key      = var.loki.storage.s3_access_key
+      s3_secret_key      = var.loki.storage.s3_secret_key
+      use_s3_secret      = local.loki_s3_secret != null
+      s3_secret_name     = local.loki_s3_secret != null ? local.loki_s3_secret.name : ""
+      s3_secret_ak_field = local.loki_s3_secret != null ? local.loki_s3_secret.access_key_field : ""
+      s3_secret_sk_field = local.loki_s3_secret != null ? local.loki_s3_secret.secret_key_field : ""
+
+      # GCS
+      gcs_chunks_bucket       = var.loki.storage.gcs_chunks_bucket
+      gcs_ruler_bucket        = var.loki.storage.gcs_ruler_bucket
+      gcs_service_account_key = var.loki.storage.gcs_service_account_key
+
+      # Azure
+      azure_storage_account     = var.loki.storage.azure_storage_account
+      azure_chunks_container    = var.loki.storage.azure_chunks_container
+      azure_ruler_container     = var.loki.storage.azure_ruler_container
+      azure_storage_account_key = var.loki.storage.azure_storage_account_key
+
+      # Helm chart behaviour
+      deployment_mode  = var.loki.deployment_mode
+      replicas         = var.loki.replicas
+      retention_period = var.loki.retention_period
+
+      # Resource requests/limits
+      requests_cpu    = var.loki.resources.requests_cpu
+      requests_memory = var.loki.resources.requests_memory
+      limits_cpu      = var.loki.resources.limits_cpu
+      limits_memory   = var.loki.resources.limits_memory
+
+      service_account_annotations = var.loki.service_account_annotations
+    })
+  ]
+
+  depends_on = [kubernetes_namespace.loki, kubernetes_secret.loki_s3_credentials]
+}

@@ -1,0 +1,60 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: receivers
+  labels:
+    alertmanagerConfig: receivers
+spec:
+  route:
+    groupBy: ['alertname', 'namespace', 'severity']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    receiver: ${default_receiver}
+    routes:
+%{ if pagerduty_enabled ~}
+      - receiver: pagerduty
+        matchers:
+          - name: severity
+            matchType: =~
+            value: '${pagerduty_severity_regex}'
+%{ endif ~}
+%{ if slack_enabled ~}
+      - receiver: slack
+        matchers:
+          - name: severity
+            matchType: =~
+            value: '${slack_severity_regex}'
+%{ endif ~}
+  receivers:
+    - name: "null"
+%{ if slack_enabled ~}
+    - name: slack
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-slack-secret
+            key: webhook_url
+          channel: '${slack_channel}'
+          sendResolved: true
+          title: '[{{ "{{" }} .Status | toUpper {{ "}}" }}{{ "{{" }} if eq .Status "firing" {{ "}}" }}:{{ "{{" }} .Alerts.Firing | len {{ "}}" }}{{ "{{" }} end {{ "}}" }}] {{ "{{" }} .CommonLabels.alertname {{ "}}" }}'
+          text: |-
+            {{ "{{" }} range .Alerts {{ "}}" }}
+            *Alert:* {{ "{{" }} .Annotations.summary {{ "}}" }}
+            *Severity:* `{{ "{{" }} .Labels.severity {{ "}}" }}`
+            *Namespace:* `{{ "{{" }} .Labels.namespace {{ "}}" }}`
+            {{ "{{" }} if .Annotations.description {{ "}}" }}*Details:* {{ "{{" }} .Annotations.description {{ "}}" }}{{ "{{" }} end {{ "}}" }}
+            {{ "{{" }} end {{ "}}" }}
+%{ endif ~}
+%{ if pagerduty_enabled ~}
+    - name: pagerduty
+      pagerdutyConfigs:
+        - routingKey:
+            name: alertmanager-pagerduty-secret
+            key: routing_key
+          sendResolved: true
+          severity: '{{ "{{" }} .CommonLabels.severity {{ "}}" }}'
+          description: '{{ "{{" }} .CommonAnnotations.summary {{ "}}" }}'
+          details:
+            namespace: '{{ "{{" }} .CommonLabels.namespace {{ "}}" }}'
+            alertname: '{{ "{{" }} .CommonLabels.alertname {{ "}}" }}'
+%{ endif ~}

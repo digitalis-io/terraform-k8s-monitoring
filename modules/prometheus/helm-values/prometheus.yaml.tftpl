@@ -1,0 +1,176 @@
+prometheus:
+  prometheusSpec:
+    retention: ${retention}
+    enableRemoteWriteReceiver: true
+%{ if mimir_remote_write_url != "" ~}
+    remoteWrite:
+      - url: ${mimir_remote_write_url}
+        name: mimir
+        headers:
+          X-Scope-OrgID: "${mimir_tenant_id}"
+%{ endif ~}
+    resources:
+      requests:
+        cpu: ${requests_cpu}
+        memory: ${requests_memory}
+      limits:
+        cpu: ${limits_cpu}
+        memory: ${limits_memory}
+    storageSpec:
+%{ if storage_size != "" ~}
+      volumeClaimTemplate:
+        spec:
+%{ if storage_class != "" ~}
+          storageClassName: ${storage_class}
+%{ endif ~}
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: ${storage_size}
+%{ else ~}
+      emptyDir: {}
+%{ endif ~}
+%{ if prometheus_ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${prometheus_ingress_class_name}
+    annotations:
+%{ for key, value in prometheus_ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${prometheus_ingress_host}
+    tls:
+      - secretName: ${prometheus_ingress_tls_secret}
+        hosts:
+          - ${prometheus_ingress_host}
+%{ endif ~}
+
+grafana:
+  enabled: ${grafana_enabled}
+%{ if grafana_enabled ~}
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ${namespace}
+    alerts:
+      enabled: true
+      label: grafana_alert
+      labelValue: "1"
+      searchNamespace: ${namespace}
+%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" ~}
+    datasources:
+      defaultDatasourceEnabled: false
+  additionalDataSources:
+%{ endif ~}
+%{ if mimir_datasource_url != "" ~}
+    - name: Mimir
+      type: prometheus
+      uid: mimir
+      url: ${mimir_datasource_url}
+      access: proxy
+      isDefault: true
+      jsonData:
+        timeInterval: 60s
+        httpHeaderName1: "X-Scope-OrgID"
+      secureJsonData:
+        httpHeaderValue1: "${mimir_tenant_id}"
+%{ endif ~}
+%{ if loki_datasource_url != "" ~}
+    - name: Loki
+      type: loki
+      uid: loki
+      url: ${loki_datasource_url}
+      access: proxy
+      isDefault: false
+%{ endif ~}
+%{ if tempo_datasource_url != "" ~}
+    - name: Tempo
+      type: tempo
+      url: ${tempo_datasource_url}
+      access: proxy
+      isDefault: false
+      jsonData:
+        httpMethod: GET
+%{ if loki_datasource_url != "" ~}
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1h"
+          spanEndTimeShift: "1h"
+          filterByTraceID: true
+          filterBySpanID: false
+%{ endif ~}
+%{ if mimir_datasource_url != "" ~}
+        tracesToMetrics:
+          datasourceUid: Mimir
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          tags:
+            - key: service.name
+              value: service
+            - key: job
+          queries:
+            - name: "Request rate"
+              query: "sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))"
+            - name: "Request latency (p95)"
+              query: "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])) by (le))"
+%{ endif ~}
+%{ endif ~}
+%{ if length(grafana_dashboard_imports) > 0 ~}
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: grafana-com
+          orgId: 1
+          folder: Imported
+          type: file
+          disableDeletion: true
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/grafana-com
+  dashboards:
+    grafana-com:
+%{ for d in grafana_dashboard_imports ~}
+      dashboard-${d.gnet_id}:
+        gnetId: ${d.gnet_id}
+        revision: ${d.revision}
+        datasource: ${d.datasource}
+%{ endfor ~}
+%{ endif ~}
+%{ endif ~}
+%{ if grafana_ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${grafana_ingress_class_name}
+    annotations:
+%{ for key, value in grafana_ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${grafana_ingress_host}
+    tls:
+      - secretName: ${grafana_ingress_tls_secret}
+        hosts:
+          - ${grafana_ingress_host}
+%{ endif ~}
+
+alertmanager:
+  enabled: ${alertmanager_enabled}
+%{ if alertmanager_ingress_enabled ~}
+  ingress:
+    enabled: true
+    ingressClassName: ${alertmanager_ingress_class_name}
+    annotations:
+%{ for key, value in alertmanager_ingress_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+    hosts:
+      - ${alertmanager_ingress_host}
+    tls:
+      - secretName: ${alertmanager_ingress_tls_secret}
+        hosts:
+          - ${alertmanager_ingress_host}
+%{ endif ~}

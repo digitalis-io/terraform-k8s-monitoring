@@ -1,0 +1,50 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# cp terraform.tfvars.example terraform.tfvars
+
+# ── Kubernetes ────────────────────────────────────────────────────────────────
+kubeconfig_path = "/home/youruser/.kube/config"  # use absolute path — tilde (~) is not expanded
+
+# ── S3-compatible storage ─────────────────────────────────────────────────────
+# Hetzner Object Storage example:
+s3_endpoint   = "https://YOUR_PROJECT.fsn1.your-objectstorage.com"
+s3_region     = "eu-central"
+s3_path_style = true
+s3_insecure   = false
+# Option A — plain-text credentials (each module auto-creates a Kubernetes Secret):
+s3_access_key = "YOUR_ACCESS_KEY_ID"
+s3_secret_key = "YOUR_SECRET_ACCESS_KEY"
+
+# Option B — reference a pre-existing Kubernetes Secret (recommended for production):
+# kubectl create secret generic observability-s3-creds -n monitoring \
+#   --from-literal=access-key=YOUR_ACCESS_KEY_ID \
+#   --from-literal=secret-key=YOUR_SECRET_ACCESS_KEY
+#
+# s3_credentials_secret_name = "observability-s3-creds"
+# s3_credentials_secret_access_key_field = "access-key"  # default
+# s3_credentials_secret_secret_key_field = "secret-key"  # default
+# s3_access_key = ""
+# s3_secret_key = ""
+
+# MinIO example (uncomment and adjust):
+# s3_endpoint   = "http://minio.minio.svc.cluster.local:9000"
+# s3_region     = "us-east-1"
+# s3_path_style = true
+# s3_insecure   = true   # only if MinIO has no TLS
+# s3_access_key = "minioadmin"
+# s3_secret_key = "minioadmin"
+
+# ── Bucket names (pre-create these before terraform apply) ────────────────────
+mimir_blocks_bucket       = "mimir-blocks"
+mimir_ruler_bucket        = "mimir-ruler"
+mimir_alertmanager_bucket = "mimir-alertmanager"
+loki_chunks_bucket        = "loki-chunks"
+loki_ruler_bucket         = "loki-ruler"
+tempo_bucket              = "tempo-traces"
+
+# ── Optional: ingress (leave empty to skip) ───────────────────────────────────
+# ingress_domain = "monitoring.example.com"
+# → Grafana will be available at https://grafana.monitoring.example.com
+
+# ── Optional: Slack alerts (leave empty to skip) ──────────────────────────────
+# slack_webhook_url = "https://hooks.slack.com/services/T000/B000/xxxx"
+# slack_channel     = "#alerts"

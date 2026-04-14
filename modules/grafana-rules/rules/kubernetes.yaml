@@ -1,0 +1,187 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: Kubernetes Nodes
+    folder: Kubernetes
+    interval: 1m
+    rules:
+      - uid: grafana-k8s-node-not-ready
+        title: Node Not Ready
+        condition: C
+        data:
+          - refId: A
+            queryType: ""
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            queryType: ""
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: "-100"
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Node {{ $labels.node }} is not ready"
+          description: "Node {{ $labels.node }} has been in NotReady state for more than 5 minutes."
+        labels:
+          severity: critical
+        isPaused: false
+
+      - uid: grafana-k8s-node-high-cpu
+        title: Node High CPU
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (node)) > 0.90
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: "Node {{ $labels.node }} CPU above 90%"
+          description: "Node {{ $labels.node }} CPU usage is {{ $value | humanizePercentage }} for more than 10 minutes."
+        labels:
+          severity: warning
+        isPaused: false
+
+  - orgId: 1
+    name: Kubernetes Pods
+    folder: Kubernetes
+    interval: 1m
+    rules:
+      - uid: grafana-k8s-pod-crash-looping
+        title: Pod Crash Looping
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+          description: "Container {{ $labels.container }} has restarted {{ $value }} times in 15 minutes."
+        labels:
+          severity: critical
+        isPaused: false
+
+      - uid: grafana-k8s-pod-oom-killed
+        title: Pod OOMKilled
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "${DS_MIMIR}"
+            model:
+              expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 0m
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
+          description: "Container {{ $labels.container }} was killed due to out-of-memory."
+        labels:
+          severity: warning
+        isPaused: false
