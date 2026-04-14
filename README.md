@@ -494,6 +494,57 @@ module "mimir" {
 
 ---
 
+### Use S3-compatible storage (Hetzner, MinIO, Ceph)
+
+Any S3-compatible service works. Set `s3_endpoint` to the service URL, `s3_path_style = true` (required by Hetzner and most non-AWS services), and provide access credentials.
+
+```hcl
+module "mimir" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/mimir"
+
+  mimir = {
+    namespace        = "monitoring"
+    retention_period = "30d"
+
+    storage = {
+      backend                = "s3"
+      s3_blocks_bucket       = "mimir-blocks"
+      s3_ruler_bucket        = "mimir-ruler"
+      s3_alertmanager_bucket = "mimir-alertmanager"
+      s3_region              = "eu-central"          # Hetzner region, or "us-east-1" for MinIO
+      s3_endpoint            = "https://YOUR_BUCKET_NAME.fsn1.your-objectstorage.com"  # Hetzner example
+      s3_path_style          = true                  # required for Hetzner, MinIO, Ceph
+      s3_insecure            = false                 # set true only for plain HTTP endpoints
+      s3_access_key          = "YOUR_ACCESS_KEY"
+      s3_secret_key          = "YOUR_SECRET_KEY"
+    }
+  }
+}
+```
+
+The same `s3_endpoint`, `s3_path_style`, and `s3_insecure` variables are available on `modules/loki` and `modules/tempo`:
+
+```hcl
+module "loki" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/loki"
+
+  loki = {
+    storage = {
+      backend          = "s3"
+      s3_chunks_bucket = "loki-chunks"
+      s3_ruler_bucket  = "loki-ruler"
+      s3_region        = "eu-central"
+      s3_endpoint      = "https://YOUR_BUCKET_NAME.fsn1.your-objectstorage.com"
+      s3_path_style    = true
+      s3_access_key    = "YOUR_ACCESS_KEY"
+      s3_secret_key    = "YOUR_SECRET_KEY"
+    }
+  }
+}
+```
+
+---
+
 ### Use GCS for Loki storage (with Workload Identity)
 
 Pre-create two GCS buckets before running `terraform apply`.

@@ -26,7 +26,10 @@ loki:
       region: ${s3_region}
 %{ if s3_endpoint != "" ~}
       endpoint: ${s3_endpoint}
-      insecure: false
+      insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+      s3ForcePathStyle: true
 %{ endif ~}
 %{ if s3_access_key != "" ~}
       accessKeyId: ${s3_access_key}

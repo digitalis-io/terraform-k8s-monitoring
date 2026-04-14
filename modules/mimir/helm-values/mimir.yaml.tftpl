@@ -25,7 +25,12 @@ mimir:
         region: ${s3_region}
 %{ if s3_endpoint != "" ~}
         endpoint: ${s3_endpoint}
-        insecure: false
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        http:
+          insecure_skip_verify: false
+        path_style_access: true
 %{ endif ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}
@@ -57,6 +62,10 @@ mimir:
         region: ${s3_region}
 %{ if s3_endpoint != "" ~}
         endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        path_style_access: true
 %{ endif ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}
@@ -85,6 +94,10 @@ mimir:
         region: ${s3_region}
 %{ if s3_endpoint != "" ~}
         endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if s3_path_style ~}
+        path_style_access: true
 %{ endif ~}
 %{ if s3_access_key != "" ~}
         access_key_id: ${s3_access_key}

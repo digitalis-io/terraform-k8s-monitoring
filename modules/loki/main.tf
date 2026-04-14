@@ -36,6 +36,8 @@ resource "helm_release" "loki" {
       s3_ruler_bucket  = var.loki.storage.s3_ruler_bucket
       s3_region        = var.loki.storage.s3_region
       s3_endpoint      = var.loki.storage.s3_endpoint
+      s3_insecure      = var.loki.storage.s3_insecure
+      s3_path_style    = var.loki.storage.s3_path_style
       s3_access_key    = var.loki.storage.s3_access_key
       s3_secret_key    = var.loki.storage.s3_secret_key
 

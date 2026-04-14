@@ -35,6 +35,8 @@ resource "helm_release" "mimir" {
       s3_alertmanager_bucket = var.mimir.storage.s3_alertmanager_bucket
       s3_region              = var.mimir.storage.s3_region
       s3_endpoint            = var.mimir.storage.s3_endpoint
+      s3_insecure            = var.mimir.storage.s3_insecure
+      s3_path_style          = var.mimir.storage.s3_path_style
       s3_access_key          = var.mimir.storage.s3_access_key
       s3_secret_key          = var.mimir.storage.s3_secret_key
 

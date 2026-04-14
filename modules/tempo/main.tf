@@ -35,6 +35,8 @@ resource "helm_release" "tempo" {
       s3_bucket     = var.tempo.storage.s3_bucket
       s3_region     = var.tempo.storage.s3_region
       s3_endpoint   = var.tempo.storage.s3_endpoint
+      s3_insecure   = var.tempo.storage.s3_insecure
+      s3_path_style = var.tempo.storage.s3_path_style
       s3_access_key = var.tempo.storage.s3_access_key
       s3_secret_key = var.tempo.storage.s3_secret_key
 
