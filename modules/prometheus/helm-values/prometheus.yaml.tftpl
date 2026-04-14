@@ -68,6 +68,7 @@ grafana:
 %{ if mimir_datasource_url != "" ~}
     - name: Mimir
       type: prometheus
+      uid: mimir
       url: ${mimir_datasource_url}
       access: proxy
       isDefault: true
@@ -100,6 +101,21 @@ grafana:
           spanEndTimeShift: "1h"
           filterByTraceID: true
           filterBySpanID: false
+%{ endif ~}
+%{ if mimir_datasource_url != "" ~}
+        tracesToMetrics:
+          datasourceUid: Mimir
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          tags:
+            - key: service.name
+              value: service
+            - key: job
+          queries:
+            - name: "Request rate"
+              query: "sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))"
+            - name: "Request latency (p95)"
+              query: "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])) by (le))"
 %{ endif ~}
 %{ endif ~}
 %{ if length(grafana_dashboard_imports) > 0 ~}
