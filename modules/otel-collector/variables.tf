@@ -1,10 +1,12 @@
 variable "otel" {
   description = "OpenTelemetry Collector configuration. All fields are optional with safe defaults."
   type = object({
-    chart_version    = optional(string, "0.150.0")
-    namespace        = optional(string, "monitoring")
-    create_namespace = optional(bool, true)
-    mode             = optional(string, "daemonset") # daemonset | deployment
+    chart_version         = optional(string, "0.150.0")
+    namespace             = optional(string, "monitoring")
+    namespace_labels      = optional(map(string), {})
+    namespace_annotations = optional(map(string), {})
+    create_namespace      = optional(bool, true)
+    mode                  = optional(string, "daemonset") # daemonset | deployment
 
     # Wire from sibling module outputs
     tempo_endpoint = optional(string, "") # OTLP gRPC :4317 -- use module.tempo.otlp_grpc_endpoint

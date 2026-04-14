@@ -2,14 +2,14 @@ resource "kubernetes_namespace" "mimir" {
   metadata {
     name = var.mimir.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "monitoring"
-    }
+    }, var.mimir.namespace_labels)
 
-    annotations = {
+    annotations = merge({
       "linkerd.io/inject" = "disabled"
-    }
+    }, var.mimir.namespace_annotations)
   }
 }
 

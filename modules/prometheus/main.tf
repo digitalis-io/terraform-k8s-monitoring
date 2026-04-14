@@ -4,14 +4,14 @@ resource "kubernetes_namespace" "prometheus" {
   metadata {
     name = var.prometheus.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "monitoring"
-    }
+    }, var.prometheus.namespace_labels)
 
-    annotations = {
+    annotations = merge({
       "linkerd.io/inject" = "disabled"
-    }
+    }, var.prometheus.namespace_annotations)
   }
 }
 

@@ -4,14 +4,14 @@ resource "kubernetes_namespace" "loki" {
   metadata {
     name = var.loki.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "monitoring"
-    }
+    }, var.loki.namespace_labels)
 
-    annotations = {
+    annotations = merge({
       "linkerd.io/inject" = "disabled"
-    }
+    }, var.loki.namespace_annotations)
   }
 }
 

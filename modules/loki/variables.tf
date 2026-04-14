@@ -1,9 +1,11 @@
 variable "loki" {
   description = "Grafana Loki configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version    = optional(string, "6.6.0")
-    namespace        = optional(string, "monitoring")
-    create_namespace = optional(bool, true)
+    chart_version         = optional(string, "6.6.0")
+    namespace             = optional(string, "monitoring")
+    namespace_labels      = optional(map(string), {})
+    namespace_annotations = optional(map(string), {})
+    create_namespace      = optional(bool, true)
     # "single-binary" — all components in one process (default, good for dev/blog)
     # "scalable"      — separate read, write, backend replica sets (SimpleScalable mode)
     deployment_mode  = optional(string, "single-binary")

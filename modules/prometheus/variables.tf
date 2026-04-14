@@ -1,11 +1,13 @@
 variable "prometheus" {
   description = "kube-prometheus-stack configuration. All fields are optional with safe defaults."
   type = object({
-    chart_version        = optional(string, "75.2.0")
-    namespace            = optional(string, "monitoring")
-    create_namespace     = optional(bool, true)
-    grafana_enabled      = optional(bool, true)
-    alertmanager_enabled = optional(bool, true)
+    chart_version         = optional(string, "75.2.0")
+    namespace             = optional(string, "monitoring")
+    namespace_labels      = optional(map(string), {})
+    namespace_annotations = optional(map(string), {})
+    create_namespace      = optional(bool, true)
+    grafana_enabled       = optional(bool, true)
+    alertmanager_enabled  = optional(bool, true)
     grafana_ingress = optional(object({
       enabled    = optional(bool, false)
       host       = optional(string, "")

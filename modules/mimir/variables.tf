@@ -1,12 +1,14 @@
 variable "mimir" {
   description = "Grafana Mimir configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version      = optional(string, "5.6.0")
-    namespace          = optional(string, "monitoring")
-    ingress_enabled    = optional(bool, false)
-    ingress_host       = optional(string, "")
-    ingress_class_name = optional(string, "nginx")
-    ingress_tls_secret = optional(string, "")
+    chart_version         = optional(string, "5.6.0")
+    namespace             = optional(string, "monitoring")
+    namespace_labels      = optional(map(string), {})
+    namespace_annotations = optional(map(string), {})
+    ingress_enabled       = optional(bool, false)
+    ingress_host          = optional(string, "")
+    ingress_class_name    = optional(string, "nginx")
+    ingress_tls_secret    = optional(string, "")
     ingress_annotations = optional(map(string), {
       "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
     })

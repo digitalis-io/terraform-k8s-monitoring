@@ -11,14 +11,14 @@ resource "kubernetes_namespace" "otel" {
   metadata {
     name = var.otel.namespace
 
-    labels = {
+    labels = merge({
       "app.kubernetes.io/managed-by" = "terraform"
       "app.kubernetes.io/component"  = "monitoring"
-    }
+    }, var.otel.namespace_labels)
 
-    annotations = {
+    annotations = merge({
       "linkerd.io/inject" = "disabled"
-    }
+    }, var.otel.namespace_annotations)
   }
 }
 

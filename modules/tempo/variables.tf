@@ -1,9 +1,11 @@
 variable "tempo" {
   description = "Grafana Tempo configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version    = optional(string, "1.40.0")
-    namespace        = optional(string, "monitoring")
-    create_namespace = optional(bool, true)
+    chart_version         = optional(string, "1.40.0")
+    namespace             = optional(string, "monitoring")
+    namespace_labels      = optional(map(string), {})
+    namespace_annotations = optional(map(string), {})
+    create_namespace      = optional(bool, true)
     # "monolithic"   — single tempo process (default, good for dev/blog)
     # "distributed"  — separate ingester, distributor, querier, compactor, etc.
     deployment_mode = optional(string, "monolithic")
