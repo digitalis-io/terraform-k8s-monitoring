@@ -20,6 +20,7 @@ Terraform modules for deploying a full observability stack on Kubernetes. Metric
 - [Common Recipes](#common-recipes)
 - [Storage Backends](#storage-backends)
 - [Architecture](#architecture)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -165,6 +166,7 @@ module "cert_manager" {
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. Defaults to `~/.kube/config`. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
 
 No notable outputs.
 
@@ -198,6 +200,10 @@ module "mimir" {
 | `ingress_class_name` | `"nginx"` | Ingress class |
 | `ingress_tls_secret` | `""` | TLS secret name |
 | `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
+| `storage.s3_blocks_prefix` | `""` | Object key prefix for blocks — allows sharing one S3 bucket across all three Mimir storage types |
+| `storage.s3_ruler_prefix` | `""` | Object key prefix for ruler data |
+| `storage.s3_alertmanager_prefix` | `""` | Object key prefix for Alertmanager data |
+| `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
 
@@ -293,6 +299,7 @@ module "loki" {
 | `replicas` | `1` | Replica count (single-binary mode) |
 | `retention_period` | `"744h"` | Log retention period (31 days) |
 | `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
+| `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
 
@@ -333,6 +340,7 @@ module "tempo" {
 | `replicas` | `1` | Replica count (monolithic mode) |
 | `retention` | `"720h"` | Trace retention period (30 days) |
 | `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
+| `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
 
@@ -412,6 +420,7 @@ module "prometheus_rules" {
 | --- | --- | --- |
 | `namespace` | `"monitoring"` | Must match the kube-prometheus-stack namespace |
 | `prometheus_release_id` | required | Output from `module.prometheus.helm_release_id` |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by `kubectl` local-exec. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
 | `extra_rules` | `{}` | Additional rule YAML files — `{ "my-app.yaml" = file("...") }` |
 | `slack.enabled` | `false` | Send alerts to Slack |
 | `slack.webhook_url` | `""` | Slack incoming webhook URL (required when enabled) |
@@ -464,6 +473,14 @@ No notable outputs.
 
 ## Common Recipes
 
+Complete, copy-paste examples are available in the `examples/` directory:
+
+| Example | Description |
+| --- | --- |
+| `examples/minimal/` | Full stack with local disk storage — no cloud credentials needed |
+| `examples/aws/` | S3 backend with IRSA authentication on EKS |
+| `examples/gcp/` | GCS backend with Workload Identity on GKE |
+
 ### Use S3 for Mimir storage (with IRSA)
 
 Pre-create three S3 buckets before running `terraform apply`. IRSA handles authentication — no access keys needed.
@@ -496,7 +513,9 @@ module "mimir" {
 
 ### Use S3-compatible storage (Hetzner, MinIO, Ceph)
 
-Any S3-compatible service works. Set `s3_endpoint` to the service URL, `s3_path_style = true` (required by Hetzner and most non-AWS services), and provide access credentials.
+Any S3-compatible service works. Set `s3_endpoint` to the service hostname or URL, `s3_path_style = true` (required by Hetzner and most non-AWS services), and provide access credentials.
+
+The module strips `https://` and `http://` from `s3_endpoint` automatically, so both `"https://fsn1.your-objectstorage.com"` and `"fsn1.your-objectstorage.com"` are accepted.
 
 ```hcl
 module "mimir" {
@@ -512,7 +531,7 @@ module "mimir" {
       s3_ruler_bucket        = "mimir-ruler"
       s3_alertmanager_bucket = "mimir-alertmanager"
       s3_region              = "eu-central"          # Hetzner region, or "us-east-1" for MinIO
-      s3_endpoint            = "https://YOUR_BUCKET_NAME.fsn1.your-objectstorage.com"  # Hetzner example
+      s3_endpoint            = "fsn1.your-objectstorage.com"  # Hetzner example — scheme optional
       s3_path_style          = true                  # required for Hetzner, MinIO, Ceph
       s3_insecure            = false                 # set true only for plain HTTP endpoints
       s3_access_key          = "YOUR_ACCESS_KEY"
@@ -534,7 +553,7 @@ module "loki" {
       s3_chunks_bucket = "loki-chunks"
       s3_ruler_bucket  = "loki-ruler"
       s3_region        = "eu-central"
-      s3_endpoint      = "https://YOUR_BUCKET_NAME.fsn1.your-objectstorage.com"
+      s3_endpoint      = "fsn1.your-objectstorage.com"  # scheme optional
       s3_path_style    = true
       s3_access_key    = "YOUR_ACCESS_KEY"
       s3_secret_key    = "YOUR_SECRET_KEY"
@@ -817,6 +836,62 @@ service_account_annotations = {
 }
 ```
 
+### S3 credentials secret
+
+Instead of passing `s3_access_key` and `s3_secret_key` as plain text, you can reference a pre-existing Kubernetes Secret. The module injects the credentials as environment variables rather than embedding them in Helm values.
+
+```hcl
+storage = {
+  backend                = "s3"
+  s3_blocks_bucket       = "mimir-blocks"
+  s3_ruler_bucket        = "mimir-ruler"
+  s3_alertmanager_bucket = "mimir-alertmanager"
+  s3_region              = "eu-west-1"
+
+  s3_credentials_secret = {
+    name             = "my-s3-secret"       # name of the pre-existing Secret
+    access_key_field = "access-key"         # key inside the Secret (default: "access-key")
+    secret_key_field = "secret-key"         # key inside the Secret (default: "secret-key")
+  }
+}
+```
+
+The same `s3_credentials_secret` variable is available on `modules/loki` and `modules/tempo`. To share one Secret across all three modules, pass the same `name` to each.
+
+Three credential modes are supported — use whichever fits your environment:
+
+| Mode | How to configure |
+| --- | --- |
+| IRSA / Workload Identity | Leave `s3_access_key`, `s3_secret_key`, and `s3_credentials_secret` all unset; provide `service_account_annotations` |
+| Plain-text keys | Set `s3_access_key` and `s3_secret_key` directly; the module creates a Secret automatically |
+| Pre-existing Secret | Set `s3_credentials_secret`; leave `s3_access_key` and `s3_secret_key` unset |
+
+### Sharing one S3 bucket across Mimir storage types (Mimir only)
+
+By default Mimir requires three separate S3 buckets (blocks, ruler, alertmanager). If you prefer a single bucket, use the `s3_blocks_prefix`, `s3_ruler_prefix`, and `s3_alertmanager_prefix` variables to isolate each storage type under a distinct key prefix.
+
+```hcl
+storage = {
+  backend                = "s3"
+  s3_blocks_bucket       = "mimir-shared"
+  s3_ruler_bucket        = "mimir-shared"
+  s3_alertmanager_bucket = "mimir-shared"
+  s3_region              = "eu-west-1"
+  s3_blocks_prefix       = "blocks"
+  s3_ruler_prefix        = "ruler"
+  s3_alertmanager_prefix = "alertmanager"
+}
+```
+
+### S3 endpoint format
+
+All three modules (mimir, loki, tempo) strip `https://` and `http://` from `s3_endpoint` automatically before passing the value to the underlying Helm chart. Either format is accepted:
+
+```hcl
+s3_endpoint = "fsn1.your-objectstorage.com"        # hostname only — preferred
+s3_endpoint = "https://fsn1.your-objectstorage.com" # scheme stripped automatically
+```
+
 ---
 
 ## Architecture
@@ -879,3 +954,50 @@ service_account_annotations = {
 | cert-manager | TLS certificate issuance for ingress |
 | prometheus-rules | Prometheus alert rules and Alertmanager receivers |
 | grafana-rules | Grafana-managed alert rules and contact points |
+
+---
+
+## Troubleshooting
+
+### "Endpoint url cannot have fully qualified paths"
+
+This error is produced by the MinIO SDK when `s3_endpoint` is passed with a scheme (`https://` or `http://`). All three modules strip the scheme automatically, so this error should not appear. If it does, verify that `s3_endpoint` contains only the hostname and optional port — no scheme prefix.
+
+```hcl
+# Correct
+s3_endpoint = "fsn1.your-objectstorage.com"
+
+# Also accepted — scheme is stripped automatically
+s3_endpoint = "https://fsn1.your-objectstorage.com"
+```
+
+### Mimir bundled MinIO conflict
+
+The `mimir-distributed` Helm chart ships with MinIO enabled by default upstream. This module disables it (`minio.enabled: false`) because the bundled MinIO injects its own S3 configuration that conflicts with external storage backends, producing the "fully qualified paths" error above. No action is required from callers — the module handles this automatically.
+
+### `usage_stats` disabled in Mimir
+
+Mimir's anonymous telemetry (`usage_stats`) is disabled by this module. When `usage_stats` is enabled and an S3-compatible endpoint is configured, Mimir attempts to send telemetry to a fully-qualified S3 path that triggers the MinIO SDK path validation error. Disabling it has no effect on Mimir's functionality.
+
+### Wrong cluster targeted by `kubectl`
+
+The `cert-manager` and `prometheus-rules` modules use `kubectl` via a `local-exec` provisioner. If the `KUBECONFIG` environment variable is set in your shell, it overrides the Terraform provider's `config_path`, causing `kubectl` to target a different cluster than the one Terraform is managing.
+
+Set `kubeconfig_path` explicitly on both modules to pin them to the correct config file:
+
+```hcl
+module "cert_manager" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/cert-manager"
+  cert_manager = {
+    kubeconfig_path = "/path/to/your/kubeconfig"
+  }
+}
+
+module "prometheus_rules" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus-rules"
+  prometheus_rules = {
+    prometheus_release_id = module.prometheus.helm_release_id
+    kubeconfig_path       = "/path/to/your/kubeconfig"
+  }
+}
+```

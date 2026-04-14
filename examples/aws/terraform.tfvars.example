@@ -1,0 +1,53 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# cp terraform.tfvars.example terraform.tfvars
+
+# -- Kubernetes ----------------------------------------------------------------
+kubeconfig_path = "/home/youruser/.kube/config"  # use absolute path — tilde (~) is not expanded
+
+# -- AWS region ----------------------------------------------------------------
+aws_region = "us-east-1"
+
+# -- IRSA role ARNs ------------------------------------------------------------
+# Pre-create these IAM roles with S3 permissions and IRSA trust policies.
+# Each role needs s3:GetObject, s3:PutObject, s3:DeleteObject, s3:ListBucket
+# on its respective buckets, plus a trust policy for the EKS OIDC provider:
+#
+#   {
+#     "Effect": "Allow",
+#     "Principal": { "Federated": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE" },
+#     "Action": "sts:AssumeRoleWithWebIdentity",
+#     "Condition": {
+#       "StringEquals": {
+#         "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub": "system:serviceaccount:monitoring:mimir"
+#       }
+#     }
+#   }
+
+mimir_irsa_role_arn = "arn:aws:iam::123456789012:role/mimir-irsa"
+loki_irsa_role_arn  = "arn:aws:iam::123456789012:role/loki-irsa"
+tempo_irsa_role_arn = "arn:aws:iam::123456789012:role/tempo-irsa"
+
+# -- Bucket names (pre-create these before terraform apply) --------------------
+mimir_blocks_bucket       = "mycompany-mimir-blocks"
+mimir_ruler_bucket        = "mycompany-mimir-ruler"
+mimir_alertmanager_bucket = "mycompany-mimir-alertmanager"
+loki_chunks_bucket        = "mycompany-loki-chunks"
+loki_ruler_bucket         = "mycompany-loki-ruler"
+tempo_bucket              = "mycompany-tempo-traces"
+
+# -- Optional: bucket key prefixes (use to share a single bucket) --------------
+# mimir_blocks_prefix       = "blocks"
+# mimir_ruler_prefix        = "ruler"
+# mimir_alertmanager_prefix = "alertmanager"
+
+# -- Optional: ingress (leave empty to skip) -----------------------------------
+# ingress_domain     = "monitoring.example.com"
+# ingress_class_name = "alb"
+# -> Grafana will be available at https://grafana.monitoring.example.com
+
+# -- Optional: Slack alerts (leave empty to skip) ------------------------------
+# slack_webhook_url = "https://hooks.slack.com/services/T000/B000/xxxx"
+# slack_channel     = "#alerts"
+
+# -- Optional: PagerDuty alerts (leave empty to skip) --------------------------
+# pagerduty_routing_key = "your-pagerduty-events-v2-routing-key"

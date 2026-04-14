@@ -78,15 +78,15 @@ resource "helm_release" "mimir" {
       s3_alertmanager_prefix = var.mimir.storage.s3_alertmanager_prefix
       s3_region              = var.mimir.storage.s3_region
       # MinIO SDK prepends https:// itself — strip any scheme the caller may have included.
-      s3_endpoint            = replace(replace(var.mimir.storage.s3_endpoint, "https://", ""), "http://", "")
-      s3_insecure            = var.mimir.storage.s3_insecure
-      s3_path_style          = var.mimir.storage.s3_path_style
-      s3_access_key          = var.mimir.storage.s3_access_key
-      s3_secret_key          = var.mimir.storage.s3_secret_key
-      use_s3_secret          = local.mimir_s3_secret != null
-      s3_secret_name         = local.mimir_s3_secret != null ? local.mimir_s3_secret.name : ""
-      s3_secret_ak_field     = local.mimir_s3_secret != null ? local.mimir_s3_secret.access_key_field : ""
-      s3_secret_sk_field     = local.mimir_s3_secret != null ? local.mimir_s3_secret.secret_key_field : ""
+      s3_endpoint        = replace(replace(var.mimir.storage.s3_endpoint, "https://", ""), "http://", "")
+      s3_insecure        = var.mimir.storage.s3_insecure
+      s3_path_style      = var.mimir.storage.s3_path_style
+      s3_access_key      = var.mimir.storage.s3_access_key
+      s3_secret_key      = var.mimir.storage.s3_secret_key
+      use_s3_secret      = local.mimir_s3_secret != null
+      s3_secret_name     = local.mimir_s3_secret != null ? local.mimir_s3_secret.name : ""
+      s3_secret_ak_field = local.mimir_s3_secret != null ? local.mimir_s3_secret.access_key_field : ""
+      s3_secret_sk_field = local.mimir_s3_secret != null ? local.mimir_s3_secret.secret_key_field : ""
 
       # GCS
       gcs_blocks_bucket       = var.mimir.storage.gcs_blocks_bucket
