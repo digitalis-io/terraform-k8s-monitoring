@@ -60,7 +60,7 @@ grafana:
       label: grafana_alert
       labelValue: "1"
       searchNamespace: ${namespace}
-%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" ~}
+%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" || pyroscope_datasource_url != "" ~}
     datasources:
       defaultDatasourceEnabled: false
   additionalDataSources:
@@ -117,6 +117,14 @@ grafana:
             - name: "Request latency (p95)"
               query: "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])) by (le))"
 %{ endif ~}
+%{ endif ~}
+%{ if pyroscope_datasource_url != "" ~}
+    - name: Pyroscope
+      type: grafana-pyroscope-datasource
+      uid: pyroscope
+      url: ${pyroscope_datasource_url}
+      access: proxy
+      isDefault: false
 %{ endif ~}
 %{ if length(grafana_dashboard_imports) > 0 ~}
   dashboardProviders:

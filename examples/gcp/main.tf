@@ -96,6 +96,27 @@ module "tempo" {
   }
 }
 
+module "pyroscope" {
+  source = "../../modules/pyroscope"
+
+  pyroscope = {
+    namespace        = "monitoring"
+    create_namespace = false
+
+    storage = {
+      backend = "gcs"
+
+      gcs_bucket = var.pyroscope_bucket
+
+      gcs_service_account_key = ""
+    }
+
+    service_account_annotations = {
+      "iam.gke.io/gcp-service-account" = var.pyroscope_gsa_email
+    }
+  }
+}
+
 module "prometheus" {
   source = "../../modules/prometheus"
 
@@ -103,11 +124,12 @@ module "prometheus" {
     namespace        = "monitoring"
     create_namespace = false
 
-    mimir_remote_write_url = module.mimir.remote_write_endpoint
-    mimir_datasource_url   = module.mimir.query_frontend_endpoint
-    mimir_tenant_id        = module.mimir.tenant_id
-    loki_datasource_url    = module.loki.datasource_url
-    tempo_datasource_url   = module.tempo.datasource_url
+    mimir_remote_write_url   = module.mimir.remote_write_endpoint
+    mimir_datasource_url     = module.mimir.query_frontend_endpoint
+    mimir_tenant_id          = module.mimir.tenant_id
+    loki_datasource_url      = module.loki.datasource_url
+    tempo_datasource_url     = module.tempo.datasource_url
+    pyroscope_datasource_url = module.pyroscope.datasource_url
 
     grafana_ingress = var.ingress_domain != "" ? {
       enabled    = true
@@ -192,4 +214,9 @@ output "otlp_grpc_endpoint" {
 output "loki_endpoint" {
   description = "Loki push endpoint for external log shippers."
   value       = module.loki.datasource_url
+}
+
+output "pyroscope_push_url" {
+  description = "Pyroscope push endpoint for profiling SDKs."
+  value       = module.pyroscope.push_url
 }

@@ -57,8 +57,9 @@ resource "helm_release" "prometheus" {
       mimir_datasource_url   = var.prometheus.mimir_datasource_url
       mimir_tenant_id        = var.prometheus.mimir_tenant_id
 
-      loki_datasource_url  = var.prometheus.loki_datasource_url
-      tempo_datasource_url = var.prometheus.tempo_datasource_url
+      loki_datasource_url      = var.prometheus.loki_datasource_url
+      tempo_datasource_url     = var.prometheus.tempo_datasource_url
+      pyroscope_datasource_url = var.prometheus.pyroscope_datasource_url
 
       grafana_dashboard_imports = var.prometheus.grafana_dashboard_imports
 

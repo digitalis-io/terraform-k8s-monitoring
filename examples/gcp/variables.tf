@@ -24,6 +24,11 @@ variable "tempo_gsa_email" {
   type        = string
 }
 
+variable "pyroscope_gsa_email" {
+  description = "Google Service Account email for the Pyroscope Kubernetes service account (Workload Identity). Must have Storage Object Admin on the Pyroscope GCS bucket."
+  type        = string
+}
+
 # -- Bucket names (pre-create these before terraform apply) --------------------
 
 variable "mimir_blocks_bucket" {
@@ -53,6 +58,11 @@ variable "loki_ruler_bucket" {
 
 variable "tempo_bucket" {
   description = "GCS bucket for Tempo trace storage."
+  type        = string
+}
+
+variable "pyroscope_bucket" {
+  description = "GCS bucket for Pyroscope continuous profiling storage."
   type        = string
 }
 

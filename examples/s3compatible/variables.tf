@@ -117,6 +117,12 @@ variable "tempo_bucket" {
   type        = string
 }
 
+variable "pyroscope_bucket" {
+  description = "S3 bucket for Pyroscope continuous profiling storage. Leave empty to disable Pyroscope."
+  type        = string
+  default     = ""
+}
+
 # ── Optional ingress ─────────────────────────────────────────────────────────
 
 variable "ingress_domain" {

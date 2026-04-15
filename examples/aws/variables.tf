@@ -30,6 +30,11 @@ variable "tempo_irsa_role_arn" {
   type        = string
 }
 
+variable "pyroscope_irsa_role_arn" {
+  description = "IAM role ARN for the Pyroscope service account (IRSA). Must have read/write access to the Pyroscope S3 bucket."
+  type        = string
+}
+
 # -- Bucket names (pre-create these before terraform apply) --------------------
 
 variable "mimir_blocks_bucket" {
@@ -77,6 +82,11 @@ variable "loki_ruler_bucket" {
 
 variable "tempo_bucket" {
   description = "S3 bucket for Tempo trace storage."
+  type        = string
+}
+
+variable "pyroscope_bucket" {
+  description = "S3 bucket for Pyroscope continuous profiling storage."
   type        = string
 }
 
