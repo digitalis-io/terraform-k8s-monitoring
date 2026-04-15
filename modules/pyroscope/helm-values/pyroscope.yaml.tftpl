@@ -1,0 +1,74 @@
+pyroscope:
+  replicaCount: ${replicas}
+
+  structuredConfig:
+%{ if storage_backend != "local" ~}
+    storage:
+      backend: ${storage_backend}
+%{ if storage_backend == "s3" ~}
+      s3:
+        bucket_name: ${s3_bucket}
+        region: ${s3_region}
+%{ if s3_endpoint != "" ~}
+        endpoint: ${s3_endpoint}
+        insecure: ${s3_insecure}
+%{ endif ~}
+%{ if use_s3_secret || s3_access_key == "" ~}
+        # Credentials supplied via AWS credential chain (IRSA, env vars, or instance metadata).
+        native_aws_auth_enabled: true
+%{ else ~}
+        access_key_id: ${s3_access_key}
+        secret_access_key: ${s3_secret_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "gcs" ~}
+      gcs:
+        bucket_name: ${gcs_bucket}
+%{ if gcs_service_account_key != "" ~}
+        service_account: ${gcs_service_account_key}
+%{ endif ~}
+%{ endif ~}
+%{ if storage_backend == "azure" ~}
+      azure:
+        account_name: ${azure_storage_account}
+        container_name: ${azure_container}
+%{ if azure_storage_account_key != "" ~}
+        account_key: ${azure_storage_account_key}
+%{ endif ~}
+%{ endif ~}
+%{ endif ~}
+
+  persistence:
+    enabled: ${storage_backend == "local"}
+    size: 10Gi
+
+%{ if use_s3_secret ~}
+  extraCustomEnvVars:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_ak_field}
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ${s3_secret_name}
+          key: ${s3_secret_sk_field}
+%{ endif ~}
+
+%{ if length(service_account_annotations) > 0 ~}
+  serviceAccount:
+    create: true
+    annotations:
+%{ for key, value in service_account_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}

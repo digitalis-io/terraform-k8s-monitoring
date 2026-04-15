@@ -46,6 +46,12 @@ variable "grafana_rules" {
   default     = {}
 }
 
+variable "pyroscope" {
+  description = "Pyroscope configuration passed through to the module."
+  type        = any
+  default     = {}
+}
+
 variable "ingress_domain" {
   description = "Domain name to use for the Ingress"
   type        = string

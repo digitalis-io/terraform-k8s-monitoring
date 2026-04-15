@@ -51,6 +51,8 @@ variable "prometheus" {
     loki_datasource_url = optional(string, "")
     # Tempo integration — wire from module.tempo.datasource_url
     tempo_datasource_url = optional(string, "")
+    # Pyroscope integration — wire from module.pyroscope.datasource_url
+    pyroscope_datasource_url = optional(string, "")
 
     # Grafana dashboard IDs to import from grafana.com (in addition to the bundled JSON dashboards).
     # Each entry: { gnet_id = 1860, revision = 37, datasource = "Mimir" }

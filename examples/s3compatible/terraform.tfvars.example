@@ -40,6 +40,7 @@ mimir_alertmanager_bucket = "mimir-alertmanager"
 loki_chunks_bucket        = "loki-chunks"
 loki_ruler_bucket         = "loki-ruler"
 tempo_bucket              = "tempo-traces"
+# pyroscope_bucket          = "pyroscope-profiles"  # leave empty to skip Pyroscope
 
 # ── Optional: ingress (leave empty to skip) ───────────────────────────────────
 # ingress_domain = "monitoring.example.com"
