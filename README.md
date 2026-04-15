@@ -15,6 +15,7 @@ Terraform modules for deploying a full observability stack on Kubernetes. Metric
   - [loki](#loki)
   - [tempo](#tempo)
   - [otel-collector](#otel-collector)
+  - [pyroscope](#pyroscope)
   - [prometheus-rules](#prometheus-rules)
   - [grafana-rules](#grafana-rules)
 - [Common Recipes](#common-recipes)
@@ -251,6 +252,7 @@ module "prometheus" {
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header |
 | `loki_datasource_url` | `""` | Loki URL — use `module.loki.datasource_url` |
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
+| `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
 | `storage_size` | `"20Gi"` | PVC size for Prometheus TSDB |
 | `storage_class` | `""` | StorageClass name (cluster default if empty) |
 | `retention` | `"24h"` | Local TSDB retention (metrics are in Mimir long-term) |
@@ -398,6 +400,72 @@ Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limi
 | `otlp_grpc_endpoint` | OTLP gRPC endpoint your apps send traces to (port 4317) |
 | `otlp_http_endpoint` | OTLP HTTP endpoint your apps send traces to (port 4318) |
 | `namespace` | Namespace where the collector is deployed |
+
+---
+
+### pyroscope
+
+Installs Grafana Pyroscope for continuous profiling. Collects CPU, memory, goroutine, and heap profiles from Go, Java, Python, Ruby, and other supported runtimes. Profiles are stored in Pyroscope and queried through a dedicated Grafana datasource.
+
+```hcl
+module "pyroscope" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/pyroscope"
+
+  pyroscope = {
+    namespace        = "monitoring"
+    create_namespace = false
+  }
+}
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `chart_version` | `"1.20.3"` | Pyroscope Helm chart version |
+| `namespace` | `"monitoring"` | Namespace to deploy into |
+| `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
+| `replicas` | `1` | Number of Pyroscope replicas |
+| `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
+| `storage.s3_bucket` | `""` | S3 bucket name |
+| `storage.s3_region` | `""` | S3 region |
+| `storage.s3_endpoint` | `""` | S3-compatible endpoint hostname (scheme stripped automatically) |
+| `storage.s3_insecure` | `false` | Use plain HTTP for the S3 endpoint |
+| `storage.s3_access_key` | `""` | S3 access key (leave empty for IRSA) |
+| `storage.s3_secret_key` | `""` | S3 secret key (leave empty for IRSA) |
+| `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
+| `storage.gcs_bucket` | `""` | GCS bucket name |
+| `storage.gcs_service_account_key` | `""` | GCS service account JSON key (leave empty for Workload Identity) |
+| `storage.azure_storage_account` | `""` | Azure storage account name |
+| `storage.azure_container` | `""` | Azure blob container name |
+| `storage.azure_storage_account_key` | `""` | Azure storage account key |
+| `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
+| `resources` | see below | CPU/memory requests and limits |
+
+Default resources: 100m CPU / 256Mi memory request, 1 CPU / 1Gi memory limit.
+
+> **S3 path-style not supported.** Pyroscope's S3 client does not support `bucket_lookup_type` (path-style access). When using an S3-compatible service such as Hetzner Object Storage, Exoscale, or Cloudflare R2, use a bucket-specific endpoint instead of a shared endpoint with `s3_path_style = true`:
+>
+> ```hcl
+> storage = {
+>   backend      = "s3"
+>   s3_bucket    = "mybucket"
+>   s3_region    = "ch-gva-2"
+>   s3_endpoint  = "mybucket.sos-ch-gva-2.exo.io"  # bucket-specific endpoint
+>   s3_access_key = "YOUR_ACCESS_KEY"
+>   s3_secret_key = "YOUR_SECRET_KEY"
+> }
+> ```
+
+**Outputs:**
+
+| Output | Description |
+| --- | --- |
+| `datasource_url` | Pyroscope URL for Grafana datasource — wire into the prometheus module as `pyroscope_datasource_url` |
+| `push_url` | Pyroscope push URL for profiling agents — `http://pyroscope.<namespace>.svc.cluster.local:4040` |
+| `namespace` | Namespace where Pyroscope is deployed |
+| `helm_release_name` | Helm release name |
+| `helm_release_version` | Deployed chart version |
 
 ---
 
@@ -728,6 +796,39 @@ module "grafana_rules" {
 
 ---
 
+### Enable continuous profiling (Pyroscope)
+
+Deploy Pyroscope and wire it into Grafana as a datasource. The `pyroscope_datasource_url` variable adds a `grafana-pyroscope-datasource` datasource with uid `pyroscope` to Grafana automatically.
+
+```hcl
+module "pyroscope" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/pyroscope"
+
+  pyroscope = {
+    namespace        = "monitoring"
+    create_namespace = false
+  }
+}
+
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace       = false
+    mimir_remote_write_url = module.mimir.remote_write_endpoint
+    mimir_datasource_url   = module.mimir.query_frontend_endpoint
+    mimir_tenant_id        = module.mimir.tenant_id
+    loki_datasource_url    = module.loki.datasource_url
+    tempo_datasource_url   = module.tempo.datasource_url
+    pyroscope_datasource_url = module.pyroscope.datasource_url
+  }
+}
+```
+
+Once deployed, push profiles from your applications to `http://pyroscope.monitoring.svc.cluster.local:4040`. Pyroscope uses port 4040 for both push ingestion and query.
+
+---
+
 ### Enable ingress for Grafana with TLS via cert-manager
 
 This requires the cert-manager module to be deployed first. The `cluster_issuer_name` in cert-manager must match the `cert-manager.io/cluster-issuer` annotation below.
@@ -794,6 +895,7 @@ All modules default to local disk storage. For production, use an object storage
 | mimir | yes | yes | yes | yes |
 | loki | yes | yes | yes | yes |
 | tempo | yes | yes | yes | yes |
+| pyroscope | yes | yes | yes | yes |
 | otel-collector | n/a | n/a | n/a | n/a |
 | prometheus | n/a | n/a | n/a | n/a |
 | cert-manager | n/a | n/a | n/a | n/a |
@@ -805,6 +907,7 @@ All modules default to local disk storage. For production, use an object storage
 | mimir | `s3_blocks_bucket`, `s3_ruler_bucket`, `s3_alertmanager_bucket` |
 | loki | `s3_chunks_bucket`, `s3_ruler_bucket` |
 | tempo | `s3_bucket` |
+| pyroscope | `s3_bucket` |
 
 **GCS bucket requirements per module:**
 
@@ -813,6 +916,7 @@ All modules default to local disk storage. For production, use an object storage
 | mimir | `gcs_blocks_bucket`, `gcs_ruler_bucket`, `gcs_alertmanager_bucket` |
 | loki | `gcs_chunks_bucket`, `gcs_ruler_bucket` |
 | tempo | `gcs_bucket` |
+| pyroscope | `gcs_bucket` |
 
 **Azure container requirements per module:**
 
@@ -821,6 +925,7 @@ All modules default to local disk storage. For production, use an object storage
 | mimir | `azure_storage_account`, `azure_blocks_container`, `azure_ruler_container`, `azure_alertmanager_container` |
 | loki | `azure_storage_account`, `azure_chunks_container`, `azure_ruler_container` |
 | tempo | `azure_storage_account`, `azure_container` |
+| pyroscope | `azure_storage_account`, `azure_container` |
 
 For IRSA (AWS) or Workload Identity (GCP/Azure), leave the key fields empty and provide the IAM annotation via `service_account_annotations`. The module does not create IAM roles — pre-create the role and supply the annotation.
 
@@ -951,6 +1056,7 @@ s3_endpoint = "https://fsn1.your-objectstorage.com" # scheme stripped automatica
 | Prometheus | Cluster scraping and remote write to Mimir |
 | Grafana | Unified dashboards and alert management |
 | OTel Collector | OTLP receiver — forwards traces to Tempo, metrics to Mimir, logs to Loki |
+| Pyroscope | Continuous profiling storage and query — CPU, memory, goroutines, heap |
 | cert-manager | TLS certificate issuance for ingress |
 | prometheus-rules | Prometheus alert rules and Alertmanager receivers |
 | grafana-rules | Grafana-managed alert rules and contact points |
