@@ -20,10 +20,10 @@ module "prometheus" {
   source = "../../modules/prometheus"
   prometheus = merge(var.prometheus, {
     # Mimir already created the monitoring namespace; skip re-creation.
-    create_namespace       = false
-    mimir_remote_write_url = module.mimir.remote_write_endpoint
-    mimir_datasource_url   = module.mimir.query_frontend_endpoint
-    mimir_tenant_id        = module.mimir.tenant_id
+    create_namespace         = false
+    mimir_remote_write_url   = module.mimir.remote_write_endpoint
+    mimir_datasource_url     = module.mimir.query_frontend_endpoint
+    mimir_tenant_id          = module.mimir.tenant_id
     loki_datasource_url      = module.loki.datasource_url
     tempo_datasource_url     = module.tempo.datasource_url
     pyroscope_datasource_url = module.pyroscope.datasource_url

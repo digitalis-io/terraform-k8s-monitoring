@@ -70,13 +70,13 @@ resource "helm_release" "pyroscope" {
       storage_backend = var.pyroscope.storage.backend
 
       # S3
-      s3_bucket          = var.pyroscope.storage.s3_bucket
-      s3_region          = var.pyroscope.storage.s3_region
+      s3_bucket = var.pyroscope.storage.s3_bucket
+      s3_region = var.pyroscope.storage.s3_region
       # Pyroscope's S3 client does not expose a path-style config option;
       # use hostname-only endpoint format for S3-compatible services.
-      s3_endpoint   = replace(replace(var.pyroscope.storage.s3_endpoint, "https://", ""), "http://", "")
-      s3_insecure   = var.pyroscope.storage.s3_insecure
-      s3_access_key = var.pyroscope.storage.s3_access_key
+      s3_endpoint        = replace(replace(var.pyroscope.storage.s3_endpoint, "https://", ""), "http://", "")
+      s3_insecure        = var.pyroscope.storage.s3_insecure
+      s3_access_key      = var.pyroscope.storage.s3_access_key
       s3_secret_key      = var.pyroscope.storage.s3_secret_key
       use_s3_secret      = local.pyroscope_s3_secret != null
       s3_secret_name     = local.pyroscope_s3_secret != null ? local.pyroscope_s3_secret.name : ""
