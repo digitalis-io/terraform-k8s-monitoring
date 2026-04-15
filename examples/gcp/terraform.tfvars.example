@@ -23,9 +23,10 @@ kubeconfig_path = "/home/youruser/.kube/config"  # use absolute path — tilde (
 #
 # Repeat for loki and tempo service accounts.
 
-mimir_gsa_email = "mimir@my-project.iam.gserviceaccount.com"
-loki_gsa_email  = "loki@my-project.iam.gserviceaccount.com"
-tempo_gsa_email = "tempo@my-project.iam.gserviceaccount.com"
+mimir_gsa_email     = "mimir@my-project.iam.gserviceaccount.com"
+loki_gsa_email      = "loki@my-project.iam.gserviceaccount.com"
+tempo_gsa_email     = "tempo@my-project.iam.gserviceaccount.com"
+pyroscope_gsa_email = "pyroscope@my-project.iam.gserviceaccount.com"
 
 # -- Bucket names (pre-create these before terraform apply) --------------------
 mimir_blocks_bucket       = "my-project-mimir-blocks"
@@ -34,6 +35,7 @@ mimir_alertmanager_bucket = "my-project-mimir-alertmanager"
 loki_chunks_bucket        = "my-project-loki-chunks"
 loki_ruler_bucket         = "my-project-loki-ruler"
 tempo_bucket              = "my-project-tempo-traces"
+pyroscope_bucket          = "my-project-pyroscope-profiles"
 
 # -- Optional: ingress (leave empty to skip) -----------------------------------
 # ingress_domain     = "monitoring.example.com"
