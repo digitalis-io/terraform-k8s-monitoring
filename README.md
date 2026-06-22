@@ -167,7 +167,7 @@ module "cert_manager" {
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
-| `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. Defaults to `~/.kube/config`. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 
 No notable outputs.
 
@@ -488,7 +488,7 @@ module "prometheus_rules" {
 | --- | --- | --- |
 | `namespace` | `"monitoring"` | Must match the kube-prometheus-stack namespace |
 | `prometheus_release_id` | required | Output from `module.prometheus.helm_release_id` |
-| `kubeconfig_path` | `""` | Path to the kubeconfig file used by `kubectl` local-exec. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by `kubectl` local-exec. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 | `extra_rules` | `{}` | Additional rule YAML files — `{ "my-app.yaml" = file("...") }` |
 | `slack.enabled` | `false` | Send alerts to Slack |
 | `slack.webhook_url` | `""` | Slack incoming webhook URL (required when enabled) |

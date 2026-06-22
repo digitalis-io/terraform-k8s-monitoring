@@ -81,17 +81,26 @@ variable "prometheus" {
   default = {}
 
   validation {
-    condition     = !(var.prometheus.grafana_ingress.enabled && var.prometheus.grafana_ingress.host == "")
-    error_message = "grafana_ingress.host is required when grafana_ingress.enabled is true."
+    condition = !(var.prometheus.grafana_ingress.enabled && (
+      var.prometheus.grafana_ingress.host == "" ||
+      !can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", var.prometheus.grafana_ingress.host))
+    ))
+    error_message = "grafana_ingress.host must be a valid RFC 1123 hostname (e.g. grafana.example.com) when grafana_ingress.enabled is true."
   }
 
   validation {
-    condition     = !(var.prometheus.prometheus_ingress.enabled && var.prometheus.prometheus_ingress.host == "")
-    error_message = "prometheus_ingress.host is required when prometheus_ingress.enabled is true."
+    condition = !(var.prometheus.prometheus_ingress.enabled && (
+      var.prometheus.prometheus_ingress.host == "" ||
+      !can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", var.prometheus.prometheus_ingress.host))
+    ))
+    error_message = "prometheus_ingress.host must be a valid RFC 1123 hostname (e.g. prometheus.example.com) when prometheus_ingress.enabled is true."
   }
 
   validation {
-    condition     = !(var.prometheus.alertmanager_ingress.enabled && var.prometheus.alertmanager_ingress.host == "")
-    error_message = "alertmanager_ingress.host is required when alertmanager_ingress.enabled is true."
+    condition = !(var.prometheus.alertmanager_ingress.enabled && (
+      var.prometheus.alertmanager_ingress.host == "" ||
+      !can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", var.prometheus.alertmanager_ingress.host))
+    ))
+    error_message = "alertmanager_ingress.host must be a valid RFC 1123 hostname (e.g. alertmanager.example.com) when alertmanager_ingress.enabled is true."
   }
 }

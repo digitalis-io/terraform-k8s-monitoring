@@ -5,7 +5,7 @@ variable "prometheus_rules" {
     namespace = optional(string, "monitoring")
 
     # Path to the kubeconfig file used by kubectl in local-exec provisioners.
-    # Defaults to ~/.kube/config. Set explicitly to avoid KUBECONFIG env var interference.
+    # When empty, kubectl uses its default resolution order (KUBECONFIG env var, then ~/.kube/config).
     kubeconfig_path = optional(string, "")
 
     # Output from module.prometheus.helm_release_id — enforces apply order so
