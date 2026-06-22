@@ -36,7 +36,7 @@ resource "kubernetes_config_map" "grafana_rule" {
   }
 
   data = {
-    "${each.key}" = each.value
+    (each.key) = each.value
   }
 }
 

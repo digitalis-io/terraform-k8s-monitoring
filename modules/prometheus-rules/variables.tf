@@ -46,4 +46,14 @@ variable "prometheus_rules" {
     condition     = !var.prometheus_rules.pagerduty.enabled || var.prometheus_rules.pagerduty.routing_key != ""
     error_message = "pagerduty.routing_key is required when pagerduty.enabled is true."
   }
+
+  validation {
+    condition     = contains(["critical", "warning", "info"], var.prometheus_rules.slack.min_severity)
+    error_message = "slack.min_severity must be one of: critical, warning, info."
+  }
+
+  validation {
+    condition     = contains(["critical", "warning", "info"], var.prometheus_rules.pagerduty.min_severity)
+    error_message = "pagerduty.min_severity must be one of: critical, warning, info."
+  }
 }

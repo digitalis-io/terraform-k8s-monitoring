@@ -14,4 +14,9 @@ variable "cert_manager" {
     kubeconfig_path = optional(string, "")
   })
   default = {}
+
+  validation {
+    condition     = var.cert_manager.cluster_issuer_name != ""
+    error_message = "cert_manager.cluster_issuer_name must not be empty."
+  }
 }

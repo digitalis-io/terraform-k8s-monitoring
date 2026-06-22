@@ -98,7 +98,7 @@ resource "kubernetes_config_map" "grafana_dashboard" {
   }
 
   data = {
-    "${each.key}" = each.value
+    (each.key) = each.value
   }
 
   depends_on = [helm_release.prometheus]
