@@ -1,6 +1,16 @@
+<div align="center">
+
+<a href="https://digitalis.io/">
+  <img src="https://digitalis-marketplace-assets.s3.us-east-1.amazonaws.com/DigitalisDigital_DigitalisFullLogoGradient+-+medium.png" alt="Digitalis.io" width="400"/>
+</a>
+
 # terraform-k8s-monitoring
 
-Terraform modules for deploying a full observability stack on Kubernetes. Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal.
+**Terraform modules for deploying a full observability stack on Kubernetes — by [Digitalis.io](https://digitalis.io)**
+
+</div>
+
+Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal. Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal.
 
 ---
 
