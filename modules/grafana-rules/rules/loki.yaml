@@ -13,7 +13,7 @@ groups:
             relativeTimeRange:
               from: 300
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: |
                 count by (namespace) (
@@ -58,7 +58,7 @@ groups:
             relativeTimeRange:
               from: 300
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: |
                 sum(rate(loki_discarded_samples_total[5m])) by (namespace, reason)

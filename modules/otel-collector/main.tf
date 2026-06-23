@@ -1,8 +1,18 @@
 locals {
-  traces_exporters  = var.otel.tempo_endpoint != "" ? "[otlp/tempo]" : "[debug]"
+  _traces_list = compact([
+    var.otel.tempo_endpoint != "" ? "otlp/tempo" : "",
+    var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
+  ])
+  _logs_list = compact([
+    var.otel.loki_endpoint != "" ? "otlphttp/loki" : "",
+    var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
+  ])
+
+  traces_exporters  = length(local._traces_list) > 0 ? "[${join(", ", local._traces_list)}]" : "[debug]"
   metrics_exporters = var.otel.mimir_endpoint != "" ? "[prometheusremotewrite]" : "[debug]"
-  logs_exporters    = var.otel.loki_endpoint != "" ? "[otlphttp/loki]" : "[debug]"
+  logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
+  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics]" : "[otlp]"
 }
 
 resource "kubernetes_namespace" "otel" {
@@ -34,7 +44,7 @@ resource "helm_release" "otel" {
   timeout          = 600
 
   values = [
-    templatefile("${path.module}/helm-values/otel-collector.yaml.tftpl", {
+    sensitive(templatefile("${path.module}/helm-values/otel-collector.yaml.tftpl", {
       mode = var.otel.mode
 
       # Image
@@ -43,15 +53,22 @@ resource "helm_release" "otel" {
       image_pull_policy = var.otel.image.pull_policy
 
       # Exporter endpoints
-      tempo_endpoint = var.otel.tempo_endpoint
-      mimir_endpoint = var.otel.mimir_endpoint
-      loki_endpoint  = var.otel.loki_endpoint
+      tempo_endpoint           = var.otel.tempo_endpoint
+      mimir_endpoint           = var.otel.mimir_endpoint
+      mimir_tenant_id          = var.otel.mimir_tenant_id
+      loki_endpoint            = var.otel.loki_endpoint
+      clickhouse_username      = var.otel.clickhouse_username
+      clickhouse_password      = var.otel.clickhouse_password
+      clickhouse_database      = var.otel.clickhouse_database
+      clickhouse_create_schema = var.otel.clickhouse_create_schema
 
       # Pre-computed pipeline lists
-      traces_exporters  = local.traces_exporters
-      metrics_exporters = local.metrics_exporters
-      logs_exporters    = local.logs_exporters
-      logs_receivers    = local.logs_receivers
+      traces_exporters    = local.traces_exporters
+      metrics_exporters   = local.metrics_exporters
+      logs_exporters      = local.logs_exporters
+      logs_receivers      = local.logs_receivers
+      metrics_receivers   = local.metrics_receivers
+      clickhouse_endpoint = var.otel.clickhouse_endpoint
 
       # Resource requests/limits
       requests_cpu    = var.otel.resources.requests_cpu
@@ -60,6 +77,55 @@ resource "helm_release" "otel" {
       limits_memory   = var.otel.resources.limits_memory
 
       service_account_annotations = var.otel.service_account_annotations
+    }))
+  ]
+
+  depends_on = [kubernetes_namespace.otel]
+}
+
+resource "helm_release" "otel_operator" {
+  count = try(var.otel.operator.enabled, false) ? 1 : 0
+
+  name       = "otel-operator"
+  repository = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  chart      = "opentelemetry-operator"
+  version    = try(var.otel.operator.chart_version, "0.116.0")
+  namespace  = var.otel.namespace
+
+  create_namespace = false
+  wait             = true
+  wait_for_jobs    = true
+  timeout          = 300
+
+  values = [
+    yamlencode({
+      manager = {
+        collectorImage = {
+          repository = try(var.otel.operator.collector_image_repository, "otel/opentelemetry-collector-k8s")
+        }
+        extraArgs = try(var.otel.operator.extra_args, [])
+        autoInstrumentation = {
+          go = {
+            enabled = try(var.otel.operator.go_instrumentation_enabled, false)
+          }
+        }
+        autoInstrumentationImage = {
+          java        = { repository = "", tag = "" }
+          nodejs      = { repository = "", tag = "" }
+          python      = { repository = "", tag = "" }
+          dotnet      = { repository = "", tag = "" }
+          apacheHttpd = { repository = "", tag = "" }
+          nginx       = { repository = "", tag = "" }
+          go = {
+            repository = try(var.otel.operator.go_instrumentation_image, "")
+            tag        = ""
+          }
+        }
+      }
+      admissionWebhooks = {
+        certManager      = { enabled = try(var.otel.operator.cert_manager_enabled, false) }
+        autoGenerateCert = { enabled = try(var.otel.operator.auto_generate_cert_enabled, true) }
+      }
     })
   ]
 

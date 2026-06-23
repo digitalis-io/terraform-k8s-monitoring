@@ -1,8 +1,8 @@
 pyroscope:
   replicaCount: ${replicas}
 
-  structuredConfig:
 %{ if storage_backend != "local" ~}
+  structuredConfig:
     storage:
       backend: ${storage_backend}
 %{ if storage_backend == "s3" ~}
@@ -14,7 +14,6 @@ pyroscope:
         insecure: ${s3_insecure}
 %{ endif ~}
 %{ if use_s3_secret || s3_access_key == "" ~}
-        # Credentials supplied via AWS credential chain (IRSA, env vars, or instance metadata).
         native_aws_auth_enabled: true
 %{ else ~}
         access_key_id: ${s3_access_key}
@@ -36,6 +35,8 @@ pyroscope:
         account_key: ${azure_storage_account_key}
 %{ endif ~}
 %{ endif ~}
+%{ else ~}
+  structuredConfig: {}
 %{ endif ~}
 
   persistence:

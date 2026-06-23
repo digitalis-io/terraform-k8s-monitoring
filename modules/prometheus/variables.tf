@@ -1,7 +1,7 @@
 variable "prometheus" {
   description = "kube-prometheus-stack configuration. All fields are optional with safe defaults."
   type = object({
-    chart_version         = optional(string, "75.2.0")
+    chart_version         = optional(string, "86.3.2")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
@@ -53,6 +53,32 @@ variable "prometheus" {
     tempo_datasource_url = optional(string, "")
     # Pyroscope integration — wire from module.pyroscope.datasource_url
     pyroscope_datasource_url = optional(string, "")
+
+    # ClickHouse integration — configure the grafana-clickhouse-datasource plugin
+    clickhouse_datasource = optional(object({
+      host     = optional(string, "")
+      port     = optional(number, 9000)
+      database = optional(string, "observability")
+      username = optional(string, "default")
+      password = optional(string, "")
+      secure   = optional(bool, false)
+
+      # OTel schema — matches tables created by the otel-collector ClickHouse exporter
+      logs_otel_enabled    = optional(bool, true)
+      logs_default_table   = optional(string, "otel_logs")
+      traces_otel_enabled  = optional(bool, true)
+      traces_default_table = optional(string, "otel_traces")
+    }), null)
+
+    # Grafana plugins to install. Defaults include common community panels.
+    grafana_plugins = optional(list(string), [
+      "digrich-bubblechart-panel",
+      "grafana-clock-panel",
+      "btplc-status-dot-panel",
+      "grafana-piechart-panel",
+      "grafana-llm-app",
+      "grafana-clickhouse-datasource",
+    ])
 
     # Grafana dashboard IDs to import from grafana.com (in addition to the bundled JSON dashboards).
     # Each entry: { gnet_id = 1860, revision = 37, datasource = "Mimir" }

@@ -258,7 +258,7 @@ module "prometheus" {
 | `retention` | `"24h"` | Local TSDB retention (metrics are in Mimir long-term) |
 | `grafana_dashboard_imports` | Node Exporter Full (1860) | Grafana.com dashboard IDs to import |
 | `extra_dashboards` | `{}` | Additional dashboard JSON — `{ "name.json" = file("...") }` |
-| `grafana_ingress` | disabled | Grafana ingress config (see [Enable ingress](#enable-ingress-for-grafana-with-tls)) |
+| `grafana_ingress` | disabled | Grafana ingress config (see [Enable ingress](#enable-ingress-for-grafana-with-tls-via-cert-manager)) |
 | `prometheus_ingress` | disabled | Prometheus ingress config |
 | `alertmanager_ingress` | disabled | Alertmanager ingress config |
 | `resources` | see below | CPU/memory requests and limits |
@@ -387,6 +387,11 @@ module "otel" {
 | `tempo_endpoint` | `""` | OTLP gRPC endpoint for Tempo — use `module.tempo.otlp_grpc_endpoint` |
 | `mimir_endpoint` | `""` | Remote write URL for Mimir — use `module.mimir.remote_write_endpoint` |
 | `loki_endpoint` | `""` | Loki push URL — use `module.loki.datasource_url` |
+| `clickhouse_endpoint` | `""` | ClickHouse HTTP endpoint (`:8123`) for logs and traces |
+| `clickhouse_username` | `""` | ClickHouse username |
+| `clickhouse_password` | `""` | ClickHouse password |
+| `clickhouse_database` | `"otel"` | ClickHouse database name for OTLP/ClickHouse exporter |
+| `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually (see below) |
 | `image.repository` | `"otel/opentelemetry-collector-contrib"` | Collector image (contrib required for Loki and Mimir exporters) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
@@ -1001,7 +1006,7 @@ s3_endpoint = "https://fsn1.your-objectstorage.com" # scheme stripped automatica
 
 ## Architecture
 
-```
+```text
                           ┌─────────────────────────────────────────┐
                           │            Kubernetes Cluster            │
                           │                                          │

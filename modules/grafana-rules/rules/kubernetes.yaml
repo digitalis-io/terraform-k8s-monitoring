@@ -14,7 +14,7 @@ groups:
             relativeTimeRange:
               from: 300
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: kube_node_status_condition{condition="Ready",status="true"} == 0
               instant: true
@@ -63,7 +63,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (node)) > 0.90
               instant: true
@@ -110,7 +110,7 @@ groups:
             relativeTimeRange:
               from: 900
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
               instant: true
@@ -152,7 +152,7 @@ groups:
             relativeTimeRange:
               from: 300
               to: 0
-            datasourceUid: "${DS_MIMIR}"
+            datasourceUid: "mimir"
             model:
               expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
               instant: true
