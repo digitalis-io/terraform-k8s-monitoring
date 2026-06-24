@@ -56,7 +56,20 @@ traces:
       enabled: true
 
 metricsGenerator:
+%{ if metrics_generator_remote_write_url != "" ~}
+  enabled: true
+  config:
+    processors:
+      - service-graphs
+      - span-metrics
+    storage:
+      path: /var/tempo/generator/wal
+      remote_write:
+        - url: ${metrics_generator_remote_write_url}
+          send_exemplars: true
+%{ else ~}
   enabled: false
+%{ endif ~}
 
 gateway:
   enabled: false

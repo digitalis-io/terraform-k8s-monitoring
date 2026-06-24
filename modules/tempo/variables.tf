@@ -52,6 +52,11 @@ variable "tempo" {
       azure_storage_account_key = optional(string, "") # leave empty to use Workload Identity
     }), {})
 
+    # Enable metrics-generator for TraceQL rate() and span metrics.
+    # Set to the Mimir (or Prometheus) remote_write URL to activate.
+    # When empty, metricsGenerator is disabled (default).
+    metrics_generator_remote_write_url = optional(string, "")
+
     # Annotations to add to the Tempo ServiceAccount.
     # Use this for IRSA, GKE Workload Identity, or Azure Workload Identity.
     # No IAM resources are created by this module; pre-create the role/SA and supply the annotation here.

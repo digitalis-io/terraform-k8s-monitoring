@@ -5,7 +5,7 @@ variable "prometheus_rules" {
     namespace = optional(string, "monitoring")
 
     # Path to the kubeconfig file used by kubectl in local-exec provisioners.
-    # Defaults to ~/.kube/config. Set explicitly to avoid KUBECONFIG env var interference.
+    # When empty, kubectl uses its default resolution order (KUBECONFIG env var, then ~/.kube/config).
     kubeconfig_path = optional(string, "")
 
     # Output from module.prometheus.helm_release_id — enforces apply order so
@@ -45,5 +45,15 @@ variable "prometheus_rules" {
   validation {
     condition     = !var.prometheus_rules.pagerduty.enabled || var.prometheus_rules.pagerduty.routing_key != ""
     error_message = "pagerduty.routing_key is required when pagerduty.enabled is true."
+  }
+
+  validation {
+    condition     = contains(["critical", "warning", "info"], var.prometheus_rules.slack.min_severity)
+    error_message = "slack.min_severity must be one of: critical, warning, info."
+  }
+
+  validation {
+    condition     = contains(["critical", "warning", "info"], var.prometheus_rules.pagerduty.min_severity)
+    error_message = "pagerduty.min_severity must be one of: critical, warning, info."
   }
 }

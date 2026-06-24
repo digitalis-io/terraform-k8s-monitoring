@@ -10,8 +10,13 @@ variable "cert_manager" {
     # Must match the cert-manager.io/cluster-issuer annotation used by other modules.
     cluster_issuer_name = optional(string, "selfsigned-cluster-issuer")
     # Path to the kubeconfig file used by kubectl in local-exec provisioners.
-    # Defaults to ~/.kube/config. Set explicitly to avoid KUBECONFIG env var interference.
+    # When empty, kubectl uses its default resolution order (KUBECONFIG env var, then ~/.kube/config).
     kubeconfig_path = optional(string, "")
   })
   default = {}
+
+  validation {
+    condition     = var.cert_manager.cluster_issuer_name != ""
+    error_message = "cert_manager.cluster_issuer_name must not be empty."
+  }
 }

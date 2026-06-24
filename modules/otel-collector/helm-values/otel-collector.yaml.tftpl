@@ -1,5 +1,21 @@
 mode: ${mode}
 
+service:
+  enabled: true
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+    appProtocol: grpc
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+
 image:
   repository: "${image_repository}"
 %{ if image_tag != "" ~}
@@ -7,6 +23,48 @@ image:
 %{ endif ~}
   pullPolicy: "${image_pull_policy}"
 
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "namespaces", "nodes"]
+      verbs: ["get", "watch", "list"]
+    - apiGroups: ["apps"]
+      resources: ["replicasets"]
+      verbs: ["get", "watch", "list"]
+    - apiGroups: ["extensions"]
+      resources: ["replicasets"]
+      verbs: ["get", "watch", "list"]
+
+extraEnvs:
+  - name: KUBE_NODE_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: spec.nodeName
+
+%{ if mode == "daemonset" ~}
+extraVolumes:
+  - name: varlogpods
+    hostPath:
+      path: /var/log/pods
+  - name: hostfs
+    hostPath:
+      path: /
+
+extraVolumeMounts:
+  - name: varlogpods
+    mountPath: /var/log/pods
+    readOnly: true
+  - name: hostfs
+    mountPath: /hostfs
+    readOnly: true
+    mountPropagation: HostToContainer
+
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+
+%{ endif ~}
 config:
   receivers:
     otlp:
@@ -22,14 +80,75 @@ config:
       include_file_path: true
       operators:
         - type: container
+    hostmetrics:
+      root_path: /hostfs
+      collection_interval: 10s
+      scrapers:
+        cpu: {}
+        load: {}
+        memory: {}
+        disk: {}
+        filesystem:
+          exclude_mount_points:
+            mount_points: [/dev/*, /proc/*, /sys/*, /run/k3s/containerd/*, /var/lib/docker/*, /var/lib/kubelet/*, /snap/*]
+            match_type: regexp
+          exclude_fs_types:
+            fs_types: [autofs, binfmt_misc, bpf, cgroup2, configfs, debugfs, devpts, devtmpfs, fusectl, hugetlbfs, iso9660, mqueue, nsfs, overlay, proc, procfs, pstore, rpc_pipefs, securityfs, selinuxfs, squashfs, sysfs, tracefs]
+            match_type: strict
+        network: {}
+        paging: {}
+        process:
+          mute_process_name_error: true
+          mute_process_exe_error: true
+          mute_process_io_error: true
+          mute_process_user_error: true
+        processes: {}
 %{ endif ~}
 
   processors:
     batch: {}
+%{ if clickhouse_endpoint != "" ~}
+    batch/clickhouse:
+      send_batch_size: 1000
+      timeout: 10s
+%{ endif ~}
     memory_limiter:
       check_interval: 5s
       limit_percentage: 80
       spike_limit_percentage: 25
+    k8sattributes:
+      auth_type: serviceAccount
+      passthrough: false
+      filter:
+        node_from_env_var: KUBE_NODE_NAME
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.deployment.name
+          - k8s.statefulset.name
+          - k8s.daemonset.name
+          - k8s.cronjob.name
+          - k8s.job.name
+          - k8s.node.name
+          - k8s.pod.name
+          - k8s.pod.uid
+          - k8s.pod.start_time
+        labels:
+          - tag_name: service.name
+            key: app.kubernetes.io/name
+            from: pod
+          - tag_name: service.version
+            key: app.kubernetes.io/version
+            from: pod
+      pod_association:
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.ip
+        - sources:
+            - from: resource_attribute
+              name: k8s.pod.uid
+        - sources:
+            - from: connection
 
   exporters:
     debug:
@@ -43,6 +162,8 @@ config:
 %{ if mimir_endpoint != "" ~}
     prometheusremotewrite:
       endpoint: ${mimir_endpoint}
+      headers:
+        X-Scope-OrgID: "${mimir_tenant_id}"
 %{ endif ~}
 %{ if loki_endpoint != "" ~}
     otlphttp/loki:
@@ -50,20 +171,38 @@ config:
       tls:
         insecure: true
 %{ endif ~}
+%{ if clickhouse_endpoint != "" ~}
+    clickhouse:
+      endpoint: ${clickhouse_endpoint}
+%{ if clickhouse_username != "" ~}
+      username: ${clickhouse_username}
+      password: ${clickhouse_password}
+%{ endif ~}
+      database: ${clickhouse_database}
+      logs_table_name: otel_logs
+      traces_table_name: otel_traces
+      create_schema: ${clickhouse_create_schema}
+      timeout: 10s
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 30s
+        max_elapsed_time: 300s
+%{ endif ~}
 
   service:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [memory_limiter, batch]
+        processors: [memory_limiter, k8sattributes, ${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${traces_exporters}
       metrics:
-        receivers: [otlp]
-        processors: [memory_limiter, batch]
+        receivers: ${metrics_receivers}
+        processors: [memory_limiter, k8sattributes, batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: ${logs_receivers}
-        processors: [memory_limiter, batch]
+        processors: [memory_limiter, k8sattributes, ${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${logs_exporters}
 
 resources:
@@ -73,21 +212,6 @@ resources:
   limits:
     cpu: ${limits_cpu}
     memory: ${limits_memory}
-
-%{ if mode == "daemonset" ~}
-extraVolumes:
-  - name: varlogpods
-    hostPath:
-      path: /var/log/pods
-extraVolumeMounts:
-  - name: varlogpods
-    mountPath: /var/log/pods
-    readOnly: true
-
-securityContext:
-  runAsUser: 0
-  runAsGroup: 0
-%{ endif ~}
 
 %{ if length(service_account_annotations) > 0 ~}
 serviceAccount:

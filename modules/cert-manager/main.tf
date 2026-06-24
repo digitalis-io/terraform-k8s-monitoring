@@ -41,7 +41,7 @@ resource "terraform_data" "cluster_issuer" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      kubectl --kubeconfig=${var.cert_manager.kubeconfig_path != "" ? var.cert_manager.kubeconfig_path : "$HOME/.kube/config"} apply -f - <<'YAML'
+      ${var.cert_manager.kubeconfig_path != "" ? "kubectl --kubeconfig=${var.cert_manager.kubeconfig_path}" : "kubectl"} apply -f - <<'YAML'
       apiVersion: cert-manager.io/v1
       kind: ClusterIssuer
       metadata:

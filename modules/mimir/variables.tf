@@ -81,8 +81,11 @@ variable "mimir" {
   default = {}
 
   validation {
-    condition     = !(var.mimir.ingress_enabled && var.mimir.ingress_host == "")
-    error_message = "ingress_host is required when ingress_enabled is true."
+    condition = !(var.mimir.ingress_enabled && (
+      var.mimir.ingress_host == "" ||
+      !can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", var.mimir.ingress_host))
+    ))
+    error_message = "ingress_host must be a valid RFC 1123 hostname (e.g. mimir.example.com) when ingress_enabled is true."
   }
 
   validation {

@@ -48,6 +48,14 @@ prometheus:
 
 grafana:
   enabled: ${grafana_enabled}
+
+%{ if length(grafana_plugins) > 0 ~}
+  plugins:
+%{ for plugin in grafana_plugins ~}
+    - ${plugin}
+%{ endfor ~}
+%{ endif ~}
+
 %{ if grafana_enabled ~}
   sidecar:
     dashboards:
@@ -60,7 +68,7 @@ grafana:
       label: grafana_alert
       labelValue: "1"
       searchNamespace: ${namespace}
-%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" || pyroscope_datasource_url != "" ~}
+%{ if mimir_datasource_url != "" || loki_datasource_url != "" || tempo_datasource_url != "" || pyroscope_datasource_url != "" || clickhouse_datasource != null ~}
     datasources:
       defaultDatasourceEnabled: false
   additionalDataSources:
@@ -104,7 +112,7 @@ grafana:
 %{ endif ~}
 %{ if mimir_datasource_url != "" ~}
         tracesToMetrics:
-          datasourceUid: Mimir
+          datasourceUid: mimir
           spanStartTimeShift: "-1m"
           spanEndTimeShift: "1m"
           tags:
@@ -125,6 +133,27 @@ grafana:
       url: ${pyroscope_datasource_url}
       access: proxy
       isDefault: false
+%{ endif ~}
+%{ if clickhouse_datasource != null ~}
+    - name: ClickHouse
+      type: grafana-clickhouse-datasource
+      uid: clickhouse
+      access: proxy
+      isDefault: false
+      jsonData:
+        defaultDatabase: ${clickhouse_datasource.database}
+        server: ${clickhouse_datasource.host}
+        port: ${clickhouse_datasource.port}
+        username: ${clickhouse_datasource.username}
+        secure: ${clickhouse_datasource.secure}
+        logs:
+          otelEnabled: ${clickhouse_datasource.logs_otel_enabled}
+          defaultTable: ${clickhouse_datasource.logs_default_table}
+        traces:
+          otelEnabled: ${clickhouse_datasource.traces_otel_enabled}
+          defaultTable: ${clickhouse_datasource.traces_default_table}
+      secureJsonData:
+        password: "${clickhouse_datasource.password}"
 %{ endif ~}
 %{ if length(grafana_dashboard_imports) > 0 ~}
   dashboardProviders:

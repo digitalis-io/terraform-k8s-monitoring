@@ -1,6 +1,16 @@
+<div align="center">
+
+<a href="https://digitalis.io/">
+  <img src="https://digitalis-marketplace-assets.s3.us-east-1.amazonaws.com/DigitalisDigital_DigitalisFullLogoGradient+-+medium.png" alt="Digitalis.io" width="400"/>
+</a>
+
 # terraform-k8s-monitoring
 
-Terraform modules for deploying a full observability stack on Kubernetes. Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal.
+**Terraform modules for deploying a full observability stack on Kubernetes — by [Digitalis.io](https://digitalis.io)**
+
+</div>
+
+Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal. Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collector), dashboards and alerts (Grafana via kube-prometheus-stack). Works on any Kubernetes cluster — EKS, GKE, AKS, or bare metal.
 
 ---
 
@@ -167,7 +177,7 @@ module "cert_manager" {
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
-| `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. Defaults to `~/.kube/config`. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 
 No notable outputs.
 
@@ -242,9 +252,11 @@ module "prometheus" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"75.2.0"` | kube-prometheus-stack Helm chart version |
+| `chart_version` | `"86.3.2"` | kube-prometheus-stack Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `grafana_enabled` | `true` | Deploy Grafana |
 | `alertmanager_enabled` | `true` | Deploy Alertmanager |
 | `mimir_remote_write_url` | `""` | Mimir remote_write URL — use `module.mimir.remote_write_endpoint` |
@@ -253,17 +265,21 @@ module "prometheus" {
 | `loki_datasource_url` | `""` | Loki URL — use `module.loki.datasource_url` |
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
 | `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
+| `clickhouse_datasource` | `null` | ClickHouse datasource config — see [ClickHouse integration](#clickhouse-integration) |
 | `storage_size` | `"20Gi"` | PVC size for Prometheus TSDB |
 | `storage_class` | `""` | StorageClass name (cluster default if empty) |
 | `retention` | `"24h"` | Local TSDB retention (metrics are in Mimir long-term) |
 | `grafana_dashboard_imports` | Node Exporter Full (1860) | Grafana.com dashboard IDs to import |
 | `extra_dashboards` | `{}` | Additional dashboard JSON — `{ "name.json" = file("...") }` |
-| `grafana_ingress` | disabled | Grafana ingress config (see [Enable ingress](#enable-ingress-for-grafana-with-tls)) |
+| `grafana_plugins` | see below | Grafana plugins to install |
+| `grafana_ingress` | disabled | Grafana ingress config (see [Enable ingress](#enable-ingress-for-grafana-with-tls-via-cert-manager)) |
 | `prometheus_ingress` | disabled | Prometheus ingress config |
 | `alertmanager_ingress` | disabled | Alertmanager ingress config |
 | `resources` | see below | CPU/memory requests and limits |
 
 Default resources: 200m CPU / 512Mi memory request, 2 CPU / 2Gi memory limit.
+
+Default Grafana plugins: `digrich-bubblechart-panel`, `grafana-clock-panel`, `btplc-status-dot-panel`, `grafana-piechart-panel`, `grafana-llm-app`, `grafana-clickhouse-datasource`.
 
 **Outputs:**
 
@@ -338,9 +354,12 @@ module "tempo" {
 | `chart_version` | `"1.40.0"` | Tempo Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `deployment_mode` | `"monolithic"` | `monolithic` or `distributed` |
 | `replicas` | `1` | Replica count (monolithic mode) |
 | `retention` | `"720h"` | Trace retention period (30 days) |
+| `metrics_generator_remote_write_url` | `""` | Mimir (or Prometheus) remote_write URL to enable metrics-generator for TraceQL `rate()` and span metrics |
 | `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
 | `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
@@ -361,7 +380,7 @@ Default resources: 100m CPU / 256Mi memory request, 2 CPU / 2Gi memory limit.
 
 ### otel-collector
 
-Installs the OpenTelemetry Collector (contrib image). Receives OTLP traces, metrics, and logs from your applications and forwards them to Tempo, Mimir, and Loki respectively. Runs as a DaemonSet by default.
+Installs the OpenTelemetry Collector (contrib image). Receives OTLP traces, metrics, and logs from your applications and forwards them to Tempo, Mimir, and Loki respectively. Optionally enables the OpenTelemetry Operator for workload instrumentation. Runs as a DaemonSet by default.
 
 ```hcl
 module "otel" {
@@ -373,6 +392,7 @@ module "otel" {
     mode             = "daemonset"
     tempo_endpoint   = module.tempo.otlp_grpc_endpoint
     mimir_endpoint   = module.mimir.remote_write_endpoint
+    mimir_tenant_id  = module.mimir.tenant_id
     loki_endpoint    = module.loki.datasource_url
   }
 }
@@ -380,18 +400,36 @@ module "otel" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"0.150.0"` | OpenTelemetry Collector Helm chart version |
+| `chart_version` | `"0.158.2"` | OpenTelemetry Collector Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `mode` | `"daemonset"` | `daemonset` or `deployment` |
 | `tempo_endpoint` | `""` | OTLP gRPC endpoint for Tempo — use `module.tempo.otlp_grpc_endpoint` |
 | `mimir_endpoint` | `""` | Remote write URL for Mimir — use `module.mimir.remote_write_endpoint` |
+| `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header sent to Mimir — use `module.mimir.tenant_id` |
 | `loki_endpoint` | `""` | Loki push URL — use `module.loki.datasource_url` |
+| `clickhouse_endpoint` | `""` | ClickHouse HTTP endpoint (`:8123`) for logs and traces |
+| `clickhouse_username` | `""` | ClickHouse username |
+| `clickhouse_password` | `""` | ClickHouse password |
+| `clickhouse_database` | `"otel"` | ClickHouse database name for OTLP/ClickHouse exporter |
+| `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually |
 | `image.repository` | `"otel/opentelemetry-collector-contrib"` | Collector image (contrib required for Loki and Mimir exporters) |
+| `image.tag` | `""` | Image tag (empty = chart appVersion) |
+| `image.pull_policy` | `"IfNotPresent"` | Image pull policy |
+| `operator.enabled` | `false` | Deploy the OpenTelemetry Operator for auto-instrumentation |
+| `operator.chart_version` | `"0.116.0"` | Operator Helm chart version |
+| `operator.collector_image_repository` | `"otel/opentelemetry-collector-k8s"` | Operator's default collector image repository |
+| `operator.cert_manager_enabled` | `false` | Use cert-manager for webhook certificates |
+| `operator.auto_generate_cert_enabled` | `true` | Auto-generate webhook certificates (incompatible with cert-manager) |
+| `operator.extra_args` | `[]` | Additional arguments to pass to the operator |
+| `operator.go_instrumentation_enabled` | `false` | Enable Go auto-instrumentation via eBPF (requires Linux kernel >=4.19) |
+| `operator.go_instrumentation_image` | `""` | Go instrumentation image (defaults to chart appVersion when empty) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
 
-Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limit.
+Default resources: 300m CPU / 256Mi memory request, 500m CPU / 512Mi memory limit.
 
 **Outputs:**
 
@@ -400,6 +438,8 @@ Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limi
 | `otlp_grpc_endpoint` | OTLP gRPC endpoint your apps send traces to (port 4317) |
 | `otlp_http_endpoint` | OTLP HTTP endpoint your apps send traces to (port 4318) |
 | `namespace` | Namespace where the collector is deployed |
+| `helm_release_name` | Helm release name |
+| `helm_release_version` | Deployed chart version |
 
 ---
 
@@ -488,7 +528,7 @@ module "prometheus_rules" {
 | --- | --- | --- |
 | `namespace` | `"monitoring"` | Must match the kube-prometheus-stack namespace |
 | `prometheus_release_id` | required | Output from `module.prometheus.helm_release_id` |
-| `kubeconfig_path` | `""` | Path to the kubeconfig file used by `kubectl` local-exec. Set explicitly if the `KUBECONFIG` env var points elsewhere (see [Troubleshooting](#troubleshooting)) |
+| `kubeconfig_path` | `""` | Path to the kubeconfig file used by `kubectl` local-exec. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 | `extra_rules` | `{}` | Additional rule YAML files — `{ "my-app.yaml" = file("...") }` |
 | `slack.enabled` | `false` | Send alerts to Slack |
 | `slack.webhook_url` | `""` | Slack incoming webhook URL (required when enabled) |
@@ -829,6 +869,134 @@ Once deployed, push profiles from your applications to `http://pyroscope.monitor
 
 ---
 
+### Enable Tempo metrics generator with Mimir backend
+
+Tempo's metrics-generator extracts RED metrics (Request, Error, Duration) and custom span metrics from traces, then writes them to Mimir for long-term storage. This enables TraceQL `rate()` queries and correlation between traces and metrics.
+
+```hcl
+module "tempo" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/tempo"
+
+  tempo = {
+    namespace        = "monitoring"
+    create_namespace = false
+    # Enable metrics generation — write to the same Mimir endpoint as Prometheus
+    metrics_generator_remote_write_url = module.mimir.remote_write_endpoint
+  }
+}
+
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace         = false
+    mimir_remote_write_url   = module.mimir.remote_write_endpoint
+    mimir_datasource_url     = module.mimir.query_frontend_endpoint
+    mimir_tenant_id          = module.mimir.tenant_id
+    tempo_datasource_url     = module.tempo.datasource_url
+  }
+}
+```
+
+---
+
+### ClickHouse integration for logs and traces
+
+Use ClickHouse as an alternative backend for OTLP logs and traces. The OTel Collector exports directly to ClickHouse, and Grafana queries via the ClickHouse datasource plugin.
+
+**Deploy ClickHouse first** (or use a managed instance), then wire the OTel Collector and Grafana datasource:
+
+```hcl
+module "otel" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/otel-collector"
+
+  otel = {
+    namespace           = "monitoring"
+    create_namespace    = false
+    tempo_endpoint      = module.tempo.otlp_grpc_endpoint
+    mimir_endpoint      = module.mimir.remote_write_endpoint
+    loki_endpoint       = module.loki.datasource_url
+    # ClickHouse exporter configuration
+    clickhouse_endpoint  = "clickhouse.observability.svc.cluster.local:8123"
+    clickhouse_username  = "default"
+    clickhouse_password  = "your-password"
+    clickhouse_database  = "otel"
+    clickhouse_create_schema = true  # auto-create tables on startup
+  }
+}
+
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace       = false
+    mimir_remote_write_url = module.mimir.remote_write_endpoint
+    mimir_datasource_url   = module.mimir.query_frontend_endpoint
+    mimir_tenant_id        = module.mimir.tenant_id
+
+    # ClickHouse datasource for querying OTel logs/traces
+    clickhouse_datasource = {
+      host     = "clickhouse.observability.svc.cluster.local"
+      port     = 9000
+      database = "otel"
+      username = "default"
+      password = "your-password"
+      secure   = false
+      # OTel schema — matches tables created by the otel-collector ClickHouse exporter
+      logs_otel_enabled    = true
+      logs_default_table   = "otel_logs"
+      traces_otel_enabled  = true
+      traces_default_table = "otel_traces"
+    }
+  }
+}
+```
+
+---
+
+### Enable OpenTelemetry Operator for auto-instrumentation
+
+The OpenTelemetry Operator enables zero-code instrumentation of workloads via annotations. Deployed workloads are automatically patched with OTEL_JAVAAGENT, Go eBPF instrumentation, or Python auto-instrumentation.
+
+```hcl
+module "otel" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/otel-collector"
+
+  otel = {
+    namespace        = "monitoring"
+    create_namespace = false
+
+    operator = {
+      enabled           = true
+      chart_version     = "0.116.0"
+      cert_manager_enabled = false  # auto-generate webhook certs by default
+      # Enable Go eBPF instrumentation (requires Linux kernel >=4.19)
+      go_instrumentation_enabled = true
+    }
+  }
+}
+```
+
+After deployment, annotate your workload to enable instrumentation:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  template:
+    metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "true"  # or inject-python, inject-go
+    spec:
+      containers:
+      - name: app
+        image: my-app:latest
+```
+
+---
+
 ### Enable ingress for Grafana with TLS via cert-manager
 
 This requires the cert-manager module to be deployed first. The `cluster_issuer_name` in cert-manager must match the `cert-manager.io/cluster-issuer` annotation below.
@@ -1001,7 +1169,7 @@ s3_endpoint = "https://fsn1.your-objectstorage.com" # scheme stripped automatica
 
 ## Architecture
 
-```
+```text
                           ┌─────────────────────────────────────────┐
                           │            Kubernetes Cluster            │
                           │                                          │
@@ -1107,3 +1275,9 @@ module "prometheus_rules" {
   }
 }
 ```
+
+---
+
+## Support
+
+This project is maintained by [Digitalis.io](https://digitalis.io). For support, visit [digitalis.io/contact](https://digitalis.io/contact).

@@ -101,7 +101,8 @@ resource "helm_release" "tempo" {
       limits_cpu      = var.tempo.resources.limits_cpu
       limits_memory   = var.tempo.resources.limits_memory
 
-      service_account_annotations = var.tempo.service_account_annotations
+      service_account_annotations        = var.tempo.service_account_annotations
+      metrics_generator_remote_write_url = var.tempo.metrics_generator_remote_write_url
     })
   ]
 

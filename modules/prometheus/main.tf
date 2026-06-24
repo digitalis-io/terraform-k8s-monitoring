@@ -27,7 +27,7 @@ resource "helm_release" "prometheus" {
   timeout          = 600
 
   values = [
-    templatefile("${path.module}/helm-values/prometheus.yaml.tftpl", {
+    sensitive(templatefile("${path.module}/helm-values/prometheus.yaml.tftpl", {
       retention            = var.prometheus.retention
       storage_size         = var.prometheus.storage_size
       storage_class        = var.prometheus.storage_class
@@ -60,14 +60,16 @@ resource "helm_release" "prometheus" {
       loki_datasource_url      = var.prometheus.loki_datasource_url
       tempo_datasource_url     = var.prometheus.tempo_datasource_url
       pyroscope_datasource_url = var.prometheus.pyroscope_datasource_url
+      clickhouse_datasource    = var.prometheus.clickhouse_datasource
 
+      grafana_plugins           = var.prometheus.grafana_plugins
       grafana_dashboard_imports = var.prometheus.grafana_dashboard_imports
 
       requests_cpu    = var.prometheus.resources.requests_cpu
       requests_memory = var.prometheus.resources.requests_memory
       limits_cpu      = var.prometheus.resources.limits_cpu
       limits_memory   = var.prometheus.resources.limits_memory
-    })
+    }))
   ]
 
   depends_on = [kubernetes_namespace.prometheus]
@@ -98,7 +100,7 @@ resource "kubernetes_config_map" "grafana_dashboard" {
   }
 
   data = {
-    "${each.key}" = each.value
+    (each.key) = each.value
   }
 
   depends_on = [helm_release.prometheus]
