@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modules/alloy`: new module — Grafana Alloy collector (daemonset/deployment/statefulset) with River/Alloy pipeline config, sibling-module integration hooks for Loki, Tempo, Mimir, Pyroscope, and OTel Collector, and WAL persistence support for statefulset mode.
+- `examples/alloy-basic`: minimal example wiring Alloy as a daemonset collector forwarding OTLP signals to Loki, Tempo, and Mimir.
 - `modules/otel-collector`: ClickHouse exporter support via new `clickhouse_endpoint`, `clickhouse_username`, `clickhouse_password`, `clickhouse_database`, and `clickhouse_create_schema` variables. Logs and traces can now be forwarded to ClickHouse alongside (or instead of) Loki/Tempo.
 - `modules/otel-collector`: OpenTelemetry Operator support via new `operator` object variable (opt-in; `operator.enabled` defaults to `false`). When enabled, deploys the OTel Operator Helm chart which provides `OpenTelemetryCollector` and `Instrumentation` CRDs. Includes optional Go eBPF auto-instrumentation support (`operator.go_instrumentation_enabled`; requires Linux kernel ≥ 4.19).
 - `modules/otel-collector`: Host metrics collection for daemonset mode — `hostmetrics` receiver added to the metrics pipeline when `mode = "daemonset"`.
