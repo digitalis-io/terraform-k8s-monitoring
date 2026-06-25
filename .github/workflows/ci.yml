@@ -144,7 +144,7 @@ jobs:
 
       - name: Run Go tests
         working-directory: test
-        run: go test -v -timeout 10m ./...
+        run: go test -v -timeout 10m -parallel 1 ./...
         env:
           TF_CLI_ARGS: "-no-color"
           TF_PLUGIN_CACHE_DIR: /tmp/tf-plugin-cache
