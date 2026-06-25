@@ -1,0 +1,2 @@
+# Test fixtures contain no sensitive data — override the root gitignore rule.
+!*.tfvars
