@@ -133,8 +133,18 @@ jobs:
           go-version-file: test/go.mod
           cache-dependency-path: test/go.sum
 
+      - name: Seed provider cache
+        run: |
+          mkdir -p /tmp/tf-plugin-cache
+          for dir in modules/alloy modules/mimir modules/prometheus; do
+            tofu -chdir="$dir" init -backend=false
+          done
+        env:
+          TF_PLUGIN_CACHE_DIR: /tmp/tf-plugin-cache
+
       - name: Run Go tests
         working-directory: test
         run: go test -v -timeout 10m ./...
         env:
           TF_CLI_ARGS: "-no-color"
+          TF_PLUGIN_CACHE_DIR: /tmp/tf-plugin-cache

@@ -11,12 +11,10 @@ Feature: Alloy namespace is created with required labels
 
   Scenario: Namespace carries the managed-by label
     Then it must contain metadata
-    And its metadata must contain labels
     And its metadata.labels must contain "app.kubernetes.io/managed-by"
     And its metadata.labels.app\.kubernetes\.io/managed-by must be "terraform"
 
   Scenario: Namespace carries the component label
     Then it must contain metadata
-    And its metadata must contain labels
     And its metadata.labels must contain "app.kubernetes.io/component"
     And its metadata.labels.app\.kubernetes\.io/component must be "monitoring"
