@@ -25,6 +25,7 @@ Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collecto
   - [loki](#loki)
   - [tempo](#tempo)
   - [otel-collector](#otel-collector)
+  - [alloy](#alloy)
   - [pyroscope](#pyroscope)
   - [prometheus-rules](#prometheus-rules)
   - [grafana-rules](#grafana-rules)
@@ -443,6 +444,67 @@ Default resources: 300m CPU / 256Mi memory request, 500m CPU / 512Mi memory limi
 
 ---
 
+### alloy
+
+Installs [Grafana Alloy](https://grafana.com/docs/alloy/) — the OpenTelemetry-native successor to Grafana Agent. Receives OTLP traces, metrics, logs, and profiles from instrumented applications using a River/Alloy pipeline config, and forwards each signal to the configured backend. Runs as a DaemonSet by default (one pod per node), but supports Deployment and StatefulSet controller types.
+
+```hcl
+module "alloy" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/alloy"
+
+  alloy = {
+    namespace        = "monitoring"
+    create_namespace = false
+    controller_type  = "daemonset"
+    tempo_endpoint   = module.tempo.otlp_grpc_endpoint
+    mimir_endpoint   = module.mimir.remote_write_endpoint
+    mimir_tenant_id  = module.mimir.tenant_id
+    loki_endpoint    = module.loki.datasource_url
+  }
+}
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `chart_version` | `"0.12.5"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `namespace` | `"monitoring"` | Namespace to deploy into |
+| `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
+| `controller_type` | `"daemonset"` | Kubernetes workload kind: `daemonset`, `deployment`, or `statefulset` |
+| `replicas` | `1` | Replica count (ignored when `controller_type = "daemonset"`) |
+| `alloy_config` | `""` | Full River/Alloy pipeline config. When empty, a built-in default config is rendered using the non-empty sibling endpoints below |
+| `loki_endpoint` | `""` | Loki push URL — use `module.loki.datasource_url` |
+| `tempo_endpoint` | `""` | Tempo OTLP gRPC endpoint — use `module.tempo.otlp_grpc_endpoint` |
+| `mimir_endpoint` | `""` | Mimir remote write URL — use `module.mimir.remote_write_endpoint` |
+| `mimir_tenant_id` | `"anonymous"` | Value sent in `X-Scope-OrgID` header to Mimir — use `module.mimir.tenant_id` |
+| `pyroscope_endpoint` | `""` | Pyroscope push URL — use `module.pyroscope.push_url` |
+| `otel_grpc_endpoint` | `""` | Upstream OTel Collector endpoint for chaining — use `module.otel.otlp_grpc_endpoint` |
+| `persistence.enabled` | `false` | Mount a PVC for WAL state (only meaningful with `controller_type = "statefulset"`) |
+| `persistence.size` | `"10Gi"` | PVC size |
+| `persistence.storage_class` | `""` | StorageClass name (cluster default if empty) |
+| `ingress.enabled` | `false` | Expose Alloy via an Ingress |
+| `ingress.host` | `""` | Ingress hostname (required when `ingress.enabled = true`) |
+| `ingress.class_name` | `"nginx"` | Ingress class |
+| `ingress.tls_secret` | `""` | TLS secret name |
+| `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
+| `resources` | see below | CPU/memory requests and limits |
+| `extra_values` | `""` | Extra Helm values merged last (highest precedence) |
+
+Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limit.
+
+**Outputs:**
+
+| Output | Description |
+| --- | --- |
+| `otlp_grpc_endpoint` | OTLP gRPC endpoint for app instrumentation — `http://alloy.<namespace>.svc.cluster.local:4317` |
+| `otlp_http_endpoint` | OTLP HTTP endpoint for app instrumentation — `http://alloy.<namespace>.svc.cluster.local:4318` |
+| `namespace` | Namespace where Alloy is deployed |
+| `helm_release_name` | Helm release name |
+| `helm_release_version` | Deployed chart version |
+
+---
+
 ### pyroscope
 
 Installs Grafana Pyroscope for continuous profiling. Collects CPU, memory, goroutine, and heap profiles from Go, Java, Python, Ruby, and other supported runtimes. Profiles are stored in Pyroscope and queried through a dedicated Grafana datasource.
@@ -586,6 +648,7 @@ Complete, copy-paste examples are available in the `examples/` directory:
 | Example | Description |
 | --- | --- |
 | `examples/minimal/` | Full stack with local disk storage — no cloud credentials needed |
+| `examples/alloy-basic/` | Alloy DaemonSet collector wired to Loki, Tempo, and Mimir |
 | `examples/aws/` | S3 backend with IRSA authentication on EKS |
 | `examples/gcp/` | GCS backend with Workload Identity on GKE |
 
@@ -1224,6 +1287,7 @@ s3_endpoint = "https://fsn1.your-objectstorage.com" # scheme stripped automatica
 | Prometheus | Cluster scraping and remote write to Mimir |
 | Grafana | Unified dashboards and alert management |
 | OTel Collector | OTLP receiver — forwards traces to Tempo, metrics to Mimir, logs to Loki |
+| Alloy | OTel-native collector (successor to Grafana Agent) — River/Alloy pipeline config |
 | Pyroscope | Continuous profiling storage and query — CPU, memory, goroutines, heap |
 | cert-manager | TLS certificate issuance for ingress |
 | prometheus-rules | Prometheus alert rules and Alertmanager receivers |
