@@ -4,6 +4,11 @@
 #
 # Read-only against the plan — no teardown needed (bdd-guidelines Rule 4).
 # Scenarios are parallel-safe.
+#
+# Note: 'it must contain X' replaces the stash with the raw value; chaining
+# 'its X must be Y' after it fails in terraform-compliance 1.15.1 because the
+# string entity hits the str/int/bool branch which always errors.
+# Use 'its X must be Y' directly against the resource stash instead.
 
 Feature: Alloy Helm release targets the correct chart
 
@@ -11,23 +16,18 @@ Feature: Alloy Helm release targets the correct chart
     Given I have helm_release defined
 
   Scenario: Release uses the Grafana Helm repository
-    Then it must contain repository
-    And its repository must be "https://grafana.github.io/helm-charts"
+    Then its repository must be "https://grafana.github.io/helm-charts"
 
   Scenario: Release uses the alloy chart
-    Then it must contain chart
-    And its chart must be "alloy"
+    Then its chart must be "alloy"
 
   Scenario: Release is named alloy
-    Then it must contain name
-    And its name must be "alloy"
+    Then its name must be "alloy"
 
   Scenario: Release does not create the namespace itself
     # The kubernetes_namespace resource controls namespace labels;
     # helm_release must not create it independently.
-    Then it must contain create_namespace
-    And its create_namespace must be false
+    Then its create_namespace must be false
 
   Scenario: Release targets the monitoring namespace by default
-    Then it must contain namespace
-    And its namespace must be "monitoring"
+    Then its namespace must be "monitoring"
