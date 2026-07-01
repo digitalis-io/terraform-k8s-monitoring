@@ -51,6 +51,12 @@ variable "prometheus" {
     loki_datasource_url = optional(string, "")
     # Tempo integration — wire from module.tempo.datasource_url
     tempo_datasource_url = optional(string, "")
+    # Loki -> Tempo correlation. Structured-metadata/label key on Loki logs
+    # holding the trace id; used to build a Grafana derived field that links a
+    # log line to its trace in Tempo. Only active when both loki_datasource_url
+    # and tempo_datasource_url are set. OTLP-ingested logs expose this as the
+    # structured-metadata field "trace_id" by default. Set "" to disable the link.
+    loki_trace_id_field = optional(string, "trace_id")
     # Pyroscope integration — wire from module.pyroscope.datasource_url
     pyroscope_datasource_url = optional(string, "")
 

@@ -265,6 +265,7 @@ module "prometheus" {
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header |
 | `loki_datasource_url` | `""` | Loki URL — use `module.loki.datasource_url` |
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
+| `loki_trace_id_field` | `"trace_id"` | Structured-metadata/label key on Loki logs holding the trace id. Builds a Grafana derived field linking a log line to its trace in Tempo (active only when both `loki_datasource_url` and `tempo_datasource_url` are set). Set `""` to disable the link |
 | `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
 | `clickhouse_datasource` | `null` | ClickHouse datasource config — see [ClickHouse integration](#clickhouse-integration) |
 | `storage_size` | `"20Gi"` | PVC size for Prometheus TSDB |
@@ -1120,6 +1121,49 @@ LIMIT 1000
 > the actual span attribute keys your instrumentation emits, then update the query's
 > `map()` keys accordingly. Only **new** logs and traces emitted after the collector
 > is deployed carry populated `TraceId`/`SpanId` fields; historic rows are not backfilled.
+
+---
+
+### Log ↔ trace correlation with Loki + Tempo
+
+When logs go to **Loki** and traces to **Tempo** (instead of, or alongside,
+ClickHouse), correlation is wired in Grafana at the **datasource** level — there
+is no shared table to join. The `prometheus` module configures both directions
+automatically when the respective datasource URLs are set:
+
+- **Trace → logs** (span → Loki): the Tempo datasource gets a `tracesToLogsV2`
+  block (`filterByTraceID: true`), so opening a span jumps to its logs in Loki.
+- **Log → trace** (Loki → Tempo): the Loki datasource gets a `derivedFields`
+  entry that turns the trace id on each log line into a **View trace** link to
+  Tempo.
+
+The OTel Collector's `filelog` parsing (see
+[otel-collector](#otel-collector) `log_parsing`) feeds this: promoting
+`trace_id`/`span_id` into the log record's trace context means Loki's OTLP
+ingestion stores them as **structured metadata**, which is exactly what the
+derived field matches.
+
+```hcl
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace     = false
+    mimir_remote_write_url = module.mimir.remote_write_endpoint
+    mimir_datasource_url   = module.mimir.query_frontend_endpoint
+    loki_datasource_url    = module.loki.datasource_url
+    tempo_datasource_url   = module.tempo.datasource_url
+
+    # Structured-metadata/label key holding the trace id on Loki logs.
+    # Default "trace_id" matches OTLP-ingested logs. Set "" to disable the link.
+    loki_trace_id_field = "trace_id"
+  }
+}
+```
+
+> Both directions require both `loki_datasource_url` and `tempo_datasource_url`
+> to be set. If your logs carry the trace id under a different structured-
+> metadata key (e.g. `traceid`, `traceID`), point `loki_trace_id_field` at it.
 
 ---
 

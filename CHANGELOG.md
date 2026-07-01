@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modules/prometheus`: Loki→Tempo log↔trace correlation. The Loki Grafana datasource now gets a `derivedFields` entry that links each log line's trace id to the trace in Tempo (a **View trace** link), complementing the existing Tempo→Loki `tracesToLogsV2` wiring. The Tempo datasource is given a stable `uid: tempo`. New `loki_trace_id_field` variable (default `"trace_id"`) selects the structured-metadata/label key holding the trace id; set `""` to disable. Active only when both `loki_datasource_url` and `tempo_datasource_url` are set.
 - `modules/otel-collector`: `log_parsing` object variable to configure structured-log parsing on the daemonset `filelog` receiver. New fields `json_enabled`, `json_match_expr`, `severity_field`, `trace_enabled`, `trace_id_field`, `span_id_field` allow you to match your application's log field names and disable parsing entirely if needed. Defaults preserve the built-in JSON detection (`^\\s*[{]`) and field names (`trace_id`, `span_id`, `level`).
 - `modules/alloy`: new module — Grafana Alloy collector (daemonset/deployment/statefulset) with River/Alloy pipeline config, sibling-module integration hooks for Loki, Tempo, Mimir, Pyroscope, and OTel Collector, and WAL persistence support for statefulset mode.
 - `examples/alloy-basic`: minimal example wiring Alloy as a daemonset collector forwarding OTLP signals to Loki, Tempo, and Mimir.

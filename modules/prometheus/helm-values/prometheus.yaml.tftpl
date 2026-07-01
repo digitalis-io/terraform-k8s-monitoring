@@ -93,10 +93,24 @@ grafana:
       url: ${loki_datasource_url}
       access: proxy
       isDefault: false
+%{ if tempo_datasource_url != "" && loki_trace_id_field != "" ~}
+      jsonData:
+        # Log -> trace: turn the trace id carried on each log line into a link
+        # to Tempo. OTLP-ingested logs expose it as structured metadata
+        # "${loki_trace_id_field}"; the label matcher picks it up.
+        derivedFields:
+          - name: TraceID
+            matcherType: label
+            matcherRegex: "${loki_trace_id_field}"
+            url: "$${__value.raw}"
+            datasourceUid: tempo
+            urlDisplayLabel: "View trace"
+%{ endif ~}
 %{ endif ~}
 %{ if tempo_datasource_url != "" ~}
     - name: Tempo
       type: tempo
+      uid: tempo
       url: ${tempo_datasource_url}
       access: proxy
       isDefault: false
