@@ -1024,9 +1024,11 @@ module "prometheus" {
 **Log ↔ trace correlation.** In `daemonset` mode the `filelog` receiver parses
 structured JSON pod logs and promotes their trace context to native OTel fields:
 
-- JSON log bodies (lines starting with `{`) are parsed into log attributes;
+- JSON log bodies matching the configured pattern (default: lines where body starts
+  with `{` after trimming leading whitespace) are parsed into log attributes;
   plain-text logs pass through untouched.
-- `SeverityText` is set from the JSON `level` field (`INFO`, `ERROR`, …).
+- `SeverityText` and `SeverityNumber` are extracted from a JSON field (default:
+  `level`; disable by setting `severity_field = ""`).
 - `trace_id`/`span_id` attributes are promoted into the log record's trace
   context, so the ClickHouse `otel_logs.TraceId`/`SpanId` columns are populated
   and correlate directly with `otel_traces` — no `JSONExtractString(Body, …)`
@@ -1049,10 +1051,11 @@ module "otel" {
 
     log_parsing = {
       json_enabled    = true
-      severity_field  = "level"       # or "severity", "lvl", …
-      trace_id_field  = "trace_id"    # or "traceID", "dd.trace_id", …
-      span_id_field   = "span_id"     # or "spanID", …
+      severity_field  = "level"       # empty "" disables severity mapping
+      trace_id_field  = "trace_id"    # e.g. "traceID", "dd.trace_id"
+      span_id_field   = "span_id"     # e.g. "spanID", "spanId"
       # Advanced: override the JSON-detection guard (expr-lang expression).
+      # Match only logs starting with { without leading whitespace:
       # json_match_expr = "hasPrefix(body, \"{\")"
     }
   }
@@ -1112,10 +1115,11 @@ ORDER BY Timestamp DESC, Duration DESC
 LIMIT 1000
 ```
 
-> **Confirm your attribute keys** before trusting the `tags` map — run
-> `SELECT SpanAttributes FROM otel.otel_traces LIMIT 1 FORMAT Vertical` and map
-> the keys you actually see. Only **new** logs emitted after the collector is
-> deployed carry a populated `TraceId`; historic rows are not backfilled.
+> **Confirm your attribute keys** before trusting the `tags` map. Run
+> `SELECT SpanAttributes FROM otel.otel_traces LIMIT 1 FORMAT Vertical` to inspect
+> the actual span attribute keys your instrumentation emits, then update the query's
+> `map()` keys accordingly. Only **new** logs and traces emitted after the collector
+> is deployed carry populated `TraceId`/`SpanId` fields; historic rows are not backfilled.
 
 ---
 
