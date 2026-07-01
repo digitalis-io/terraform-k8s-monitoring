@@ -80,6 +80,25 @@ config:
       include_file_path: true
       operators:
         - type: container
+        # Parse structured JSON log bodies so trace context and severity are
+        # promoted to native OTel fields. Guarded to JSON lines (body starts
+        # with '{') so plain-text logs pass through untouched.
+        - type: json_parser
+          parse_from: body
+          parse_to: attributes
+          if: 'body matches "^\\s*[{]"'
+          severity:
+            parse_from: attributes.level
+        # Promote trace_id/span_id from the parsed JSON into the log record's
+        # trace context, filling ClickHouse TraceId/SpanId and enabling
+        # log <-> trace correlation. Guarded so lines without a trace_id
+        # (plain text or JSON without trace fields) are not treated as errors.
+        - type: trace_parser
+          if: 'attributes["trace_id"] != nil'
+          trace_id:
+            parse_from: attributes.trace_id
+          span_id:
+            parse_from: attributes.span_id
     hostmetrics:
       root_path: /hostfs
       collection_interval: 10s

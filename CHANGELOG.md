@@ -32,4 +32,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `modules/otel-collector`: the `filelog` receiver (daemonset mode) now parses structured JSON pod logs and promotes their trace context to native OTel fields. A guarded `json_parser` populates `SeverityText` from the JSON `level` and lifts fields into log attributes (plain-text logs pass through untouched), and a guarded `trace_parser` promotes `trace_id`/`span_id` into the record's trace context. This fills the ClickHouse `otel_logs.TraceId`/`SpanId` columns, enabling native log↔trace correlation without `JSONExtractString(Body, …)`. Fixes [#10](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/10).
 - `local-exec` kubectl provisioners in `modules/cert-manager` and `modules/prometheus-rules` no longer hardcode `$HOME/.kube/config` as the kubeconfig fallback. When `kubeconfig_path` is empty, `--kubeconfig` is omitted entirely so kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Fixes terraform apply failures when `$HOME/.kube/config` does not exist.

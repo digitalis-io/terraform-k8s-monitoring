@@ -1015,6 +1015,20 @@ module "prometheus" {
 }
 ```
 
+**Log ↔ trace correlation.** In `daemonset` mode the `filelog` receiver parses
+structured JSON pod logs and promotes their trace context to native OTel fields:
+
+- JSON log bodies (lines starting with `{`) are parsed into log attributes;
+  plain-text logs pass through untouched.
+- `SeverityText` is set from the JSON `level` field (`INFO`, `ERROR`, …).
+- `trace_id`/`span_id` attributes are promoted into the log record's trace
+  context, so the ClickHouse `otel_logs.TraceId`/`SpanId` columns are populated
+  and correlate directly with `otel_traces` — no `JSONExtractString(Body, …)`
+  needed. This also drives Grafana logs↔traces linking.
+
+To benefit, applications must log JSON to stdout with `trace_id` and `span_id`
+fields (e.g. Go `slog` with a trace-enriching handler).
+
 ---
 
 ### Enable OpenTelemetry Operator for auto-instrumentation
