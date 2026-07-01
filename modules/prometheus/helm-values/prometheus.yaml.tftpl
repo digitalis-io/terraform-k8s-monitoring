@@ -105,7 +105,13 @@ grafana:
           - name: TraceID
             matcherType: regex
             matcherRegex: '"${loki_trace_id_field}":"(\w+)"'
-            url: '$${__value.raw}'
+            # Grafana interpolates dollar-brace sequences in provisioning files
+            # as env-var refs at load time, so a single-dollar __value.raw
+            # resolves to "" and the trace link opens Tempo with an empty query.
+            # Doubling the leading dollar escapes it. templatefile() collapses
+            # each doubled dollar, so the three dollars below render as two in the
+            # ConfigMap -- Grafana then stores the correct single-dollar form.
+            url: '$$${__value.raw}'
             datasourceUid: tempo
             urlDisplayLabel: "View trace"
 %{ endif ~}
