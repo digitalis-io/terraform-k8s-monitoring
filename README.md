@@ -416,6 +416,12 @@ module "otel" {
 | `clickhouse_password` | `""` | ClickHouse password |
 | `clickhouse_database` | `"otel"` | ClickHouse database name for OTLP/ClickHouse exporter |
 | `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually |
+| `log_parsing.json_enabled` | `true` | Parse JSON pod-log bodies (daemonset mode). When `false`, the `filelog` receiver uses only the `container` operator and bodies stay opaque |
+| `log_parsing.json_match_expr` | `body matches "^\\s*[{]"` | OTel `filelog` `if` guard — only bodies matching this expr are JSON-parsed, so plain-text logs pass through untouched. Override to match your log shape (e.g. `hasPrefix(body, "{")`) |
+| `log_parsing.severity_field` | `"level"` | JSON field mapped to `SeverityText`/`SeverityNumber`. Set `""` to disable severity mapping |
+| `log_parsing.trace_enabled` | `true` | Promote `trace_id`/`span_id` into the log record's trace context (fills ClickHouse `TraceId`/`SpanId`). Requires `json_enabled = true` |
+| `log_parsing.trace_id_field` | `"trace_id"` | JSON field holding the trace id (e.g. `traceID`, `traceId`, `dd.trace_id`) |
+| `log_parsing.span_id_field` | `"span_id"` | JSON field holding the span id (e.g. `spanID`, `spanId`) |
 | `image.repository` | `"otel/opentelemetry-collector-contrib"` | Collector image (contrib required for Loki and Mimir exporters) |
 | `image.tag` | `""` | Image tag (empty = chart appVersion) |
 | `image.pull_policy` | `"IfNotPresent"` | Image pull policy |
@@ -1028,6 +1034,88 @@ structured JSON pod logs and promotes their trace context to native OTel fields:
 
 To benefit, applications must log JSON to stdout with `trace_id` and `span_id`
 fields (e.g. Go `slog` with a trace-enriching handler).
+
+**Match your log field names.** The parser is fully configurable via
+`log_parsing` — point it at whatever field names your loggers emit, change the
+JSON detection guard, or disable parsing entirely:
+
+```hcl
+module "otel" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/otel-collector"
+
+  otel = {
+    namespace           = "monitoring"
+    clickhouse_endpoint = "clickhouse.observability.svc.cluster.local:8123"
+
+    log_parsing = {
+      json_enabled    = true
+      severity_field  = "level"       # or "severity", "lvl", …
+      trace_id_field  = "trace_id"    # or "traceID", "dd.trace_id", …
+      span_id_field   = "span_id"     # or "spanID", …
+      # Advanced: override the JSON-detection guard (expr-lang expression).
+      # json_match_expr = "hasPrefix(body, \"{\")"
+    }
+  }
+}
+```
+
+To turn parsing off (opaque bodies, no severity/trace promotion) set
+`log_parsing = { json_enabled = false }`.
+
+#### Grafana ClickHouse trace query (error-logs → traces)
+
+Once `otel_logs.TraceId`/`SeverityText` are populated, this query drives a
+Grafana **Table/Traces** panel showing traces that produced error logs. Adjust
+the `tags` map keys to the span attributes **your** instrumentation emits — the
+example below uses stable OpenTelemetry HTTP semantic conventions (≥ 1.21) and
+derives the `error` tag from the span status, not a `SpanAttributes['error']`
+key (which OTel does not set):
+
+```sql
+SELECT
+    TraceId       AS traceID,
+    SpanId        AS spanID,
+    ParentSpanId  AS parentSpanID,
+    SpanName      AS operationName,
+    ServiceName   AS serviceName,
+    Timestamp     AS startTime,
+    multiply(Duration, 0.000001) AS duration,   -- ns -> ms
+
+    cast(
+        map(
+            -- Stable HTTP semconv (>= 1.21). For older SDKs use
+            -- http.method / http.status_code / http.target instead.
+            'http.method',      SpanAttributes['http.request.method'],
+            'http.status_code', SpanAttributes['http.response.status_code'],
+            'http.route',       SpanAttributes['http.route'],
+            'url.path',         SpanAttributes['url.path'],
+            -- OTel marks span errors via status, not an attribute:
+            'error',            if(StatusCode = 'Error', 'true', ''),
+            'status.message',   StatusMessage
+        ),
+        'Map(String, String)'
+    ) AS tags
+
+FROM "otel"."otel_traces"
+WHERE
+    Timestamp >= $__fromTime AND Timestamp <= $__toTime
+    AND Duration > 0
+    AND TraceId IN (
+        SELECT TraceId
+        FROM "otel"."otel_logs"
+        WHERE
+            Timestamp >= $__fromTime AND Timestamp <= $__toTime
+            AND (SeverityText = 'ERROR' OR SeverityNumber >= 17)
+            AND TraceId != ''
+    )
+ORDER BY Timestamp DESC, Duration DESC
+LIMIT 1000
+```
+
+> **Confirm your attribute keys** before trusting the `tags` map — run
+> `SELECT SpanAttributes FROM otel.otel_traces LIMIT 1 FORMAT Vertical` and map
+> the keys you actually see. Only **new** logs emitted after the collector is
+> deployed carry a populated `TraceId`; historic rows are not backfilled.
 
 ---
 

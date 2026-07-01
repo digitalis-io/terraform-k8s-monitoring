@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modules/otel-collector`: `log_parsing` object variable to configure structured-log (JSON) parsing on the daemonset `filelog` receiver. Fields: `json_enabled` (master switch), `json_match_expr` (JSON-detection `if` guard), `severity_field`, `trace_enabled`, `trace_id_field`, and `span_id_field` — so the trace/severity promotion (see Fixed) can be pointed at whatever field names your loggers emit, or disabled entirely. Defaults preserve the built-in `trace_id`/`span_id`/`level` behaviour.
 - `modules/alloy`: new module — Grafana Alloy collector (daemonset/deployment/statefulset) with River/Alloy pipeline config, sibling-module integration hooks for Loki, Tempo, Mimir, Pyroscope, and OTel Collector, and WAL persistence support for statefulset mode.
 - `examples/alloy-basic`: minimal example wiring Alloy as a daemonset collector forwarding OTLP signals to Loki, Tempo, and Mimir.
 - `modules/otel-collector`: ClickHouse exporter support via new `clickhouse_endpoint`, `clickhouse_username`, `clickhouse_password`, `clickhouse_database`, and `clickhouse_create_schema` variables. Logs and traces can now be forwarded to ClickHouse alongside (or instead of) Loki/Tempo.
