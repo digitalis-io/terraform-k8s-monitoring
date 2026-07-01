@@ -95,14 +95,17 @@ grafana:
       isDefault: false
 %{ if tempo_datasource_url != "" && loki_trace_id_field != "" ~}
       jsonData:
-        # Log -> trace: turn the trace id carried on each log line into a link
-        # to Tempo. OTLP-ingested logs expose it as structured metadata
-        # "${loki_trace_id_field}"; the label matcher picks it up.
+        # Log -> trace: extract the trace id from the JSON log body and link to
+        # Tempo. A regex matcher against the line body is used deliberately -- a
+        # `matcherType: label` matcher does not resolve a value for OTLP
+        # structured-metadata fields in the Grafana Logs Drilldown app, which
+        # leaves the link (and the Tempo query) empty. The JSON body always
+        # carries `"<field>":"<hex>"`, so the regex is version-independent.
         derivedFields:
           - name: TraceID
-            matcherType: label
-            matcherRegex: "${loki_trace_id_field}"
-            url: "$${__value.raw}"
+            matcherType: regex
+            matcherRegex: '"${loki_trace_id_field}":"(\w+)"'
+            url: '$${__value.raw}'
             datasourceUid: tempo
             urlDisplayLabel: "View trace"
 %{ endif ~}

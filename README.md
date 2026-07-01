@@ -265,7 +265,7 @@ module "prometheus" {
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header |
 | `loki_datasource_url` | `""` | Loki URL — use `module.loki.datasource_url` |
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
-| `loki_trace_id_field` | `"trace_id"` | Structured-metadata/label key on Loki logs holding the trace id. Builds a Grafana derived field linking a log line to its trace in Tempo (active only when both `loki_datasource_url` and `tempo_datasource_url` are set). Set `""` to disable the link |
+| `loki_trace_id_field` | `"trace_id"` | Name of the trace-id field in the JSON log body. Builds a Grafana derived field (regex matcher `"<field>":"(\w+)"`) linking a log line to its trace in Tempo (active only when both `loki_datasource_url` and `tempo_datasource_url` are set). Set `""` to disable the link |
 | `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
 | `tempo_profile_type_id` | `"process_cpu:cpu:nanoseconds:cpu:nanoseconds"` | Default Pyroscope profile type for the Tempo **Trace to profiles** link (span → Pyroscope). Active only when both `tempo_datasource_url` and `pyroscope_datasource_url` are set. Set `""` to disable |
 | `clickhouse_datasource` | `null` | ClickHouse datasource config — see [ClickHouse integration](#clickhouse-integration) |
@@ -1135,14 +1135,16 @@ automatically when the respective datasource URLs are set:
 - **Trace → logs** (span → Loki): the Tempo datasource gets a `tracesToLogsV2`
   block (`filterByTraceID: true`), so opening a span jumps to its logs in Loki.
 - **Log → trace** (Loki → Tempo): the Loki datasource gets a `derivedFields`
-  entry that turns the trace id on each log line into a **View trace** link to
-  Tempo.
+  entry that extracts the trace id from each log line and turns it into a
+  **View trace** link to Tempo.
 
-The OTel Collector's `filelog` parsing (see
-[otel-collector](#otel-collector) `log_parsing`) feeds this: promoting
-`trace_id`/`span_id` into the log record's trace context means Loki's OTLP
-ingestion stores them as **structured metadata**, which is exactly what the
-derived field matches.
+The derived field uses a **regex matcher** against the JSON log body
+(`"<field>":"(\w+)"`, from `loki_trace_id_field`), not a structured-metadata
+label matcher. A label matcher does not resolve a value in the Grafana Logs
+Drilldown app, which leaves the Tempo query empty — so the regex form is used
+for version-independent, reliable linking. This works because the OTel
+Collector's `filelog` parsing (see [otel-collector](#otel-collector)
+`log_parsing`) emits the `trace_id` field into the JSON log body.
 
 ```hcl
 module "prometheus" {
@@ -1155,16 +1157,16 @@ module "prometheus" {
     loki_datasource_url    = module.loki.datasource_url
     tempo_datasource_url   = module.tempo.datasource_url
 
-    # Structured-metadata/label key holding the trace id on Loki logs.
-    # Default "trace_id" matches OTLP-ingested logs. Set "" to disable the link.
+    # Name of the trace-id field in the JSON log body. Default "trace_id"
+    # matches the otel-collector filelog output. Set "" to disable the link.
     loki_trace_id_field = "trace_id"
   }
 }
 ```
 
 > Both directions require both `loki_datasource_url` and `tempo_datasource_url`
-> to be set. If your logs carry the trace id under a different structured-
-> metadata key (e.g. `traceid`, `traceID`), point `loki_trace_id_field` at it.
+> to be set. If your logs carry the trace id under a different JSON field name
+> (e.g. `traceid`, `traceID`), point `loki_trace_id_field` at it.
 
 ---
 
