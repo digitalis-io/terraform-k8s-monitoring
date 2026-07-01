@@ -139,6 +139,15 @@ grafana:
             - name: "Request latency (p95)"
               query: "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])) by (le))"
 %{ endif ~}
+%{ if pyroscope_datasource_url != "" && tempo_profile_type_id != "" ~}
+        tracesToProfiles:
+          datasourceUid: pyroscope
+          profileTypeId: "${tempo_profile_type_id}"
+          customQuery: false
+          tags:
+            - key: service.name
+              value: service_name
+%{ endif ~}
 %{ endif ~}
 %{ if pyroscope_datasource_url != "" ~}
     - name: Pyroscope

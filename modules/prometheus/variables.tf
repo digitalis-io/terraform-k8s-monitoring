@@ -59,6 +59,11 @@ variable "prometheus" {
     loki_trace_id_field = optional(string, "trace_id")
     # Pyroscope integration — wire from module.pyroscope.datasource_url
     pyroscope_datasource_url = optional(string, "")
+    # Trace -> profiles (Tempo -> Pyroscope). Default Pyroscope profile type
+    # opened when jumping from a span to profiles. Only active when both
+    # tempo_datasource_url and pyroscope_datasource_url are set. Set "" to
+    # disable the trace-to-profiles link.
+    tempo_profile_type_id = optional(string, "process_cpu:cpu:nanoseconds:cpu:nanoseconds")
 
     # ClickHouse integration — configure the grafana-clickhouse-datasource plugin
     clickhouse_datasource = optional(object({

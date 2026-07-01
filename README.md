@@ -267,6 +267,7 @@ module "prometheus" {
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
 | `loki_trace_id_field` | `"trace_id"` | Structured-metadata/label key on Loki logs holding the trace id. Builds a Grafana derived field linking a log line to its trace in Tempo (active only when both `loki_datasource_url` and `tempo_datasource_url` are set). Set `""` to disable the link |
 | `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
+| `tempo_profile_type_id` | `"process_cpu:cpu:nanoseconds:cpu:nanoseconds"` | Default Pyroscope profile type for the Tempo **Trace to profiles** link (span → Pyroscope). Active only when both `tempo_datasource_url` and `pyroscope_datasource_url` are set. Set `""` to disable |
 | `clickhouse_datasource` | `null` | ClickHouse datasource config — see [ClickHouse integration](#clickhouse-integration) |
 | `storage_size` | `"20Gi"` | PVC size for Prometheus TSDB |
 | `storage_class` | `""` | StorageClass name (cluster default if empty) |
@@ -1164,6 +1165,40 @@ module "prometheus" {
 > Both directions require both `loki_datasource_url` and `tempo_datasource_url`
 > to be set. If your logs carry the trace id under a different structured-
 > metadata key (e.g. `traceid`, `traceID`), point `loki_trace_id_field` at it.
+
+---
+
+### Trace ↔ profiles with Tempo + Pyroscope
+
+When traces go to **Tempo** and continuous profiles to **Pyroscope**, the
+`prometheus` module wires the Tempo datasource's **Trace to profiles**
+(`tracesToProfiles`) link automatically — opening a span jumps to the matching
+CPU profile in Pyroscope, correlated by `service.name`.
+
+Active only when both `tempo_datasource_url` and `pyroscope_datasource_url` are
+set. The `tempo_profile_type_id` variable selects which profile type opens by
+default:
+
+```hcl
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace         = false
+    mimir_remote_write_url   = module.mimir.remote_write_endpoint
+    mimir_datasource_url     = module.mimir.query_frontend_endpoint
+    tempo_datasource_url     = module.tempo.datasource_url
+    pyroscope_datasource_url = module.pyroscope.datasource_url
+
+    # Profile type opened from a span. Default is CPU time; set "" to disable.
+    tempo_profile_type_id = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+  }
+}
+```
+
+> The span → profile match uses the `service.name` span tag mapped to the
+> Pyroscope `service_name` label, so your traces and profiles must share the
+> same service name.
 
 ---
 
