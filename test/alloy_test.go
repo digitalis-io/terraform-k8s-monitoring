@@ -347,6 +347,22 @@ func TestAlloyExampleValidate(t *testing.T) {
 	terraform.InitAndValidate(t, opts)
 }
 
+// TestAlloyFaroReceiverExampleValidate verifies that
+// examples/alloy-faro-receiver passes terraform validate — two module.alloy
+// instances (a daemonset collector and a faro_receiver-enabled deployment)
+// composed together with distinct release names.
+func TestAlloyFaroReceiverExampleValidate(t *testing.T) {
+	t.Parallel()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../examples/alloy-faro-receiver",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+	}
+
+	terraform.InitAndValidate(t, opts)
+}
+
 // TestAlloyModuleValidateCustomReleaseName verifies that release_name is
 // accepted, so a second Alloy-based release (e.g. a Faro receiver gateway)
 // can be deployed into the same namespace as a daemonset collector without
