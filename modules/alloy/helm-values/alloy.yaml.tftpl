@@ -17,18 +17,17 @@ alloy:
         sourcemaps { }
 
         output {
-          logs   = [otelcol.processor.batch.default.input]
+%{ if loki_endpoint != "" ~}
+          logs   = [loki.write.default.receiver]
+%{ else ~}
+          logs   = []
+%{ endif ~}
           traces = [otelcol.processor.batch.default.input]
         }
       }
 
       otelcol.processor.batch "default" {
         output {
-%{ if loki_endpoint != "" ~}
-          logs   = [otelcol.exporter.loki.default.input]
-%{ else ~}
-          logs   = [otelcol.exporter.debug.default.input]
-%{ endif ~}
 %{ if tempo_endpoint != "" ~}
           traces = [otelcol.exporter.otlp.tempo.input]
 %{ else ~}
@@ -51,10 +50,6 @@ alloy:
 
 %{ endif ~}
 %{ if loki_endpoint != "" ~}
-      otelcol.exporter.loki "default" {
-        forward_to = [loki.write.default.receiver]
-      }
-
       loki.write "default" {
         endpoint {
           url = "${loki_endpoint}/loki/api/v1/push"
@@ -192,6 +187,9 @@ alloy:
 %{ endif ~}
 %{ endif ~}
 %{ endif ~}
+  extraArgs:
+    - --stability.level=experimental
+
   controller:
     type: ${controller_type}
 %{ if controller_type != "daemonset" ~}
