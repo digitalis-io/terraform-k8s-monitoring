@@ -62,6 +62,14 @@ resource "helm_release" "otel" {
       clickhouse_database      = var.otel.clickhouse_database
       clickhouse_create_schema = var.otel.clickhouse_create_schema
 
+      # Structured-log (filelog) parsing knobs
+      log_json_enabled    = var.otel.log_parsing.json_enabled
+      log_json_match_expr = var.otel.log_parsing.json_match_expr
+      log_severity_field  = var.otel.log_parsing.severity_field
+      log_trace_enabled   = var.otel.log_parsing.trace_enabled
+      log_trace_id_field  = var.otel.log_parsing.trace_id_field
+      log_span_id_field   = var.otel.log_parsing.span_id_field
+
       # Pre-computed pipeline lists
       traces_exporters    = local.traces_exporters
       metrics_exporters   = local.metrics_exporters

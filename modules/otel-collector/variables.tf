@@ -19,6 +19,33 @@ variable "otel" {
     clickhouse_database      = optional(string, "otel")      # ClickHouse database for OTLP/ClickHouse exporter
     clickhouse_create_schema = optional(bool, true)          # auto-create DB/tables on startup
 
+    # Structured-log parsing for the daemonset `filelog` receiver.
+    # Promotes trace context and severity from JSON pod logs into native OTel
+    # fields (fills ClickHouse otel_logs.TraceId/SpanId/SeverityText and enables
+    # log<->trace correlation). Only applies in mode = "daemonset".
+    log_parsing = optional(object({
+      # Master switch for the json_parser operator. When false, the filelog
+      # receiver uses only the `container` operator (bodies stay opaque).
+      json_enabled = optional(bool, true)
+
+      # Raw OTel filelog `if` expression that guards JSON parsing, so plain-text
+      # logs pass through untouched. Default matches lines whose (leading-space-
+      # trimmed) body starts with '{'. Advanced: this is an expr-lang expression
+      # rendered inside a single-quoted YAML scalar -- mind expr/YAML escaping if
+      # you override it (e.g. use hasPrefix(body, "{") to avoid regex backslashes).
+      json_match_expr = optional(string, "body matches \"^\\\\s*[{]\"")
+
+      # JSON field mapped to SeverityText/SeverityNumber. Empty ("") disables
+      # severity mapping.
+      severity_field = optional(string, "level")
+
+      # Promote trace_id/span_id JSON fields into the log record's trace context.
+      # Requires json_enabled = true.
+      trace_enabled  = optional(bool, true)
+      trace_id_field = optional(string, "trace_id")
+      span_id_field  = optional(string, "span_id")
+    }), {})
+
     image = optional(object({
       # contrib includes prometheusremotewrite and loki exporters required for Mimir/Loki forwarding
       repository  = optional(string, "otel/opentelemetry-collector-contrib")

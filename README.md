@@ -265,7 +265,9 @@ module "prometheus" {
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header |
 | `loki_datasource_url` | `""` | Loki URL — use `module.loki.datasource_url` |
 | `tempo_datasource_url` | `""` | Tempo URL — use `module.tempo.datasource_url` |
+| `loki_trace_id_field` | `"trace_id"` | Name of the trace-id field in the JSON log body. Builds a Grafana derived field (regex matcher `"<field>":"(\w+)"`) linking a log line to its trace in Tempo (active only when both `loki_datasource_url` and `tempo_datasource_url` are set). Set `""` to disable the link |
 | `pyroscope_datasource_url` | `""` | Pyroscope URL — use `module.pyroscope.datasource_url` |
+| `tempo_profile_type_id` | `"process_cpu:cpu:nanoseconds:cpu:nanoseconds"` | Default Pyroscope profile type for the Tempo **Trace to profiles** link (span → Pyroscope). Active only when both `tempo_datasource_url` and `pyroscope_datasource_url` are set. Set `""` to disable |
 | `clickhouse_datasource` | `null` | ClickHouse datasource config — see [ClickHouse integration](#clickhouse-integration) |
 | `storage_size` | `"20Gi"` | PVC size for Prometheus TSDB |
 | `storage_class` | `""` | StorageClass name (cluster default if empty) |
@@ -416,6 +418,12 @@ module "otel" {
 | `clickhouse_password` | `""` | ClickHouse password |
 | `clickhouse_database` | `"otel"` | ClickHouse database name for OTLP/ClickHouse exporter |
 | `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually |
+| `log_parsing.json_enabled` | `true` | Parse JSON pod-log bodies (daemonset mode). When `false`, the `filelog` receiver uses only the `container` operator and bodies stay opaque |
+| `log_parsing.json_match_expr` | `body matches "^\\s*[{]"` | OTel `filelog` `if` guard — only bodies matching this expr are JSON-parsed, so plain-text logs pass through untouched. Override to match your log shape (e.g. `hasPrefix(body, "{")`) |
+| `log_parsing.severity_field` | `"level"` | JSON field mapped to `SeverityText`/`SeverityNumber`. Set `""` to disable severity mapping |
+| `log_parsing.trace_enabled` | `true` | Promote `trace_id`/`span_id` into the log record's trace context (fills ClickHouse `TraceId`/`SpanId`). Requires `json_enabled = true` |
+| `log_parsing.trace_id_field` | `"trace_id"` | JSON field holding the trace id (e.g. `traceID`, `traceId`, `dd.trace_id`) |
+| `log_parsing.span_id_field` | `"span_id"` | JSON field holding the span id (e.g. `spanID`, `spanId`) |
 | `image.repository` | `"otel/opentelemetry-collector-contrib"` | Collector image (contrib required for Loki and Mimir exporters) |
 | `image.tag` | `""` | Image tag (empty = chart appVersion) |
 | `image.pull_policy` | `"IfNotPresent"` | Image pull policy |
@@ -1014,6 +1022,185 @@ module "prometheus" {
   }
 }
 ```
+
+**Log ↔ trace correlation.** In `daemonset` mode the `filelog` receiver parses
+structured JSON pod logs and promotes their trace context to native OTel fields:
+
+- JSON log bodies matching the configured pattern (default: lines where body starts
+  with `{` after trimming leading whitespace) are parsed into log attributes;
+  plain-text logs pass through untouched.
+- `SeverityText` and `SeverityNumber` are extracted from a JSON field (default:
+  `level`; disable by setting `severity_field = ""`).
+- `trace_id`/`span_id` attributes are promoted into the log record's trace
+  context, so the ClickHouse `otel_logs.TraceId`/`SpanId` columns are populated
+  and correlate directly with `otel_traces` — no `JSONExtractString(Body, …)`
+  needed. This also drives Grafana logs↔traces linking.
+
+To benefit, applications must log JSON to stdout with `trace_id` and `span_id`
+fields (e.g. Go `slog` with a trace-enriching handler).
+
+**Match your log field names.** The parser is fully configurable via
+`log_parsing` — point it at whatever field names your loggers emit, change the
+JSON detection guard, or disable parsing entirely:
+
+```hcl
+module "otel" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/otel-collector"
+
+  otel = {
+    namespace           = "monitoring"
+    clickhouse_endpoint = "clickhouse.observability.svc.cluster.local:8123"
+
+    log_parsing = {
+      json_enabled    = true
+      severity_field  = "level"       # empty "" disables severity mapping
+      trace_id_field  = "trace_id"    # e.g. "traceID", "dd.trace_id"
+      span_id_field   = "span_id"     # e.g. "spanID", "spanId"
+      # Advanced: override the JSON-detection guard (expr-lang expression).
+      # Match only logs starting with { without leading whitespace:
+      # json_match_expr = "hasPrefix(body, \"{\")"
+    }
+  }
+}
+```
+
+To turn parsing off (opaque bodies, no severity/trace promotion) set
+`log_parsing = { json_enabled = false }`.
+
+#### Grafana ClickHouse trace query (error-logs → traces)
+
+Once `otel_logs.TraceId`/`SeverityText` are populated, this query drives a
+Grafana **Table/Traces** panel showing traces that produced error logs. Adjust
+the `tags` map keys to the span attributes **your** instrumentation emits — the
+example below uses stable OpenTelemetry HTTP semantic conventions (≥ 1.21) and
+derives the `error` tag from the span status, not a `SpanAttributes['error']`
+key (which OTel does not set):
+
+```sql
+SELECT
+    TraceId       AS traceID,
+    SpanId        AS spanID,
+    ParentSpanId  AS parentSpanID,
+    SpanName      AS operationName,
+    ServiceName   AS serviceName,
+    Timestamp     AS startTime,
+    multiply(Duration, 0.000001) AS duration,   -- ns -> ms
+
+    cast(
+        map(
+            -- Stable HTTP semconv (>= 1.21). For older SDKs use
+            -- http.method / http.status_code / http.target instead.
+            'http.method',      SpanAttributes['http.request.method'],
+            'http.status_code', SpanAttributes['http.response.status_code'],
+            'http.route',       SpanAttributes['http.route'],
+            'url.path',         SpanAttributes['url.path'],
+            -- OTel marks span errors via status, not an attribute:
+            'error',            if(StatusCode = 'Error', 'true', ''),
+            'status.message',   StatusMessage
+        ),
+        'Map(String, String)'
+    ) AS tags
+
+FROM "otel"."otel_traces"
+WHERE
+    Timestamp >= $__fromTime AND Timestamp <= $__toTime
+    AND Duration > 0
+    AND TraceId IN (
+        SELECT TraceId
+        FROM "otel"."otel_logs"
+        WHERE
+            Timestamp >= $__fromTime AND Timestamp <= $__toTime
+            AND (SeverityText = 'ERROR' OR SeverityNumber >= 17)
+            AND TraceId != ''
+    )
+ORDER BY Timestamp DESC, Duration DESC
+LIMIT 1000
+```
+
+> **Confirm your attribute keys** before trusting the `tags` map. Run
+> `SELECT SpanAttributes FROM otel.otel_traces LIMIT 1 FORMAT Vertical` to inspect
+> the actual span attribute keys your instrumentation emits, then update the query's
+> `map()` keys accordingly. Only **new** logs and traces emitted after the collector
+> is deployed carry populated `TraceId`/`SpanId` fields; historic rows are not backfilled.
+
+---
+
+### Log ↔ trace correlation with Loki + Tempo
+
+When logs go to **Loki** and traces to **Tempo** (instead of, or alongside,
+ClickHouse), correlation is wired in Grafana at the **datasource** level — there
+is no shared table to join. The `prometheus` module configures both directions
+automatically when the respective datasource URLs are set:
+
+- **Trace → logs** (span → Loki): the Tempo datasource gets a `tracesToLogsV2`
+  block (`filterByTraceID: true`), so opening a span jumps to its logs in Loki.
+- **Log → trace** (Loki → Tempo): the Loki datasource gets a `derivedFields`
+  entry that extracts the trace id from each log line and turns it into a
+  **View trace** link to Tempo.
+
+The derived field uses a **regex matcher** against the JSON log body
+(`"<field>":"(\w+)"`, from `loki_trace_id_field`), not a structured-metadata
+label matcher. A label matcher does not resolve a value in the Grafana Logs
+Drilldown app, which leaves the Tempo query empty — so the regex form is used
+for version-independent, reliable linking. This works because the OTel
+Collector's `filelog` parsing (see [otel-collector](#otel-collector)
+`log_parsing`) emits the `trace_id` field into the JSON log body.
+
+```hcl
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace     = false
+    mimir_remote_write_url = module.mimir.remote_write_endpoint
+    mimir_datasource_url   = module.mimir.query_frontend_endpoint
+    loki_datasource_url    = module.loki.datasource_url
+    tempo_datasource_url   = module.tempo.datasource_url
+
+    # Name of the trace-id field in the JSON log body. Default "trace_id"
+    # matches the otel-collector filelog output. Set "" to disable the link.
+    loki_trace_id_field = "trace_id"
+  }
+}
+```
+
+> Both directions require both `loki_datasource_url` and `tempo_datasource_url`
+> to be set. If your logs carry the trace id under a different JSON field name
+> (e.g. `traceid`, `traceID`), point `loki_trace_id_field` at it.
+
+---
+
+### Trace ↔ profiles with Tempo + Pyroscope
+
+When traces go to **Tempo** and continuous profiles to **Pyroscope**, the
+`prometheus` module wires the Tempo datasource's **Trace to profiles**
+(`tracesToProfiles`) link automatically — opening a span jumps to the matching
+CPU profile in Pyroscope, correlated by `service.name`.
+
+Active only when both `tempo_datasource_url` and `pyroscope_datasource_url` are
+set. The `tempo_profile_type_id` variable selects which profile type opens by
+default:
+
+```hcl
+module "prometheus" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/prometheus"
+
+  prometheus = {
+    create_namespace         = false
+    mimir_remote_write_url   = module.mimir.remote_write_endpoint
+    mimir_datasource_url     = module.mimir.query_frontend_endpoint
+    tempo_datasource_url     = module.tempo.datasource_url
+    pyroscope_datasource_url = module.pyroscope.datasource_url
+
+    # Profile type opened from a span. Default is CPU time; set "" to disable.
+    tempo_profile_type_id = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+  }
+}
+```
+
+> The span → profile match uses the `service.name` span tag mapped to the
+> Pyroscope `service_name` label, so your traces and profiles must share the
+> same service name.
 
 ---
 

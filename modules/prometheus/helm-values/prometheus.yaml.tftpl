@@ -93,10 +93,33 @@ grafana:
       url: ${loki_datasource_url}
       access: proxy
       isDefault: false
+%{ if tempo_datasource_url != "" && loki_trace_id_field != "" ~}
+      jsonData:
+        # Log -> trace: extract the trace id from the JSON log body and link to
+        # Tempo. A regex matcher against the line body is used deliberately -- a
+        # `matcherType: label` matcher does not resolve a value for OTLP
+        # structured-metadata fields in the Grafana Logs Drilldown app, which
+        # leaves the link (and the Tempo query) empty. The JSON body always
+        # carries `"<field>":"<hex>"`, so the regex is version-independent.
+        derivedFields:
+          - name: TraceID
+            matcherType: regex
+            matcherRegex: '"${loki_trace_id_field}":"(\w+)"'
+            # Grafana interpolates dollar-brace sequences in provisioning files
+            # as env-var refs at load time, so a single-dollar __value.raw
+            # resolves to "" and the trace link opens Tempo with an empty query.
+            # Doubling the leading dollar escapes it. templatefile() collapses
+            # each doubled dollar, so the three dollars below render as two in the
+            # ConfigMap -- Grafana then stores the correct single-dollar form.
+            url: '$$${__value.raw}'
+            datasourceUid: tempo
+            urlDisplayLabel: "View trace"
+%{ endif ~}
 %{ endif ~}
 %{ if tempo_datasource_url != "" ~}
     - name: Tempo
       type: tempo
+      uid: tempo
       url: ${tempo_datasource_url}
       access: proxy
       isDefault: false
@@ -124,6 +147,15 @@ grafana:
               query: "sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))"
             - name: "Request latency (p95)"
               query: "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])) by (le))"
+%{ endif ~}
+%{ if pyroscope_datasource_url != "" && tempo_profile_type_id != "" ~}
+        tracesToProfiles:
+          datasourceUid: pyroscope
+          profileTypeId: "${tempo_profile_type_id}"
+          customQuery: false
+          tags:
+            - key: service.name
+              value: service_name
 %{ endif ~}
 %{ endif ~}
 %{ if pyroscope_datasource_url != "" ~}

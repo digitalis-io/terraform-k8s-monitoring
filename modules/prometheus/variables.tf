@@ -51,8 +51,21 @@ variable "prometheus" {
     loki_datasource_url = optional(string, "")
     # Tempo integration — wire from module.tempo.datasource_url
     tempo_datasource_url = optional(string, "")
+    # Loki -> Tempo correlation. Name of the trace-id field in the JSON log
+    # body; used to build a Grafana derived field (regex matcher
+    # '"<field>":"(\w+)"') that links a log line to its trace in Tempo. A regex
+    # matcher against the body is used rather than a structured-metadata label
+    # matcher, which the Grafana Logs Drilldown app does not resolve. Only active
+    # when both loki_datasource_url and tempo_datasource_url are set. Set "" to
+    # disable the link.
+    loki_trace_id_field = optional(string, "trace_id")
     # Pyroscope integration — wire from module.pyroscope.datasource_url
     pyroscope_datasource_url = optional(string, "")
+    # Trace -> profiles (Tempo -> Pyroscope). Default Pyroscope profile type
+    # opened when jumping from a span to profiles. Only active when both
+    # tempo_datasource_url and pyroscope_datasource_url are set. Set "" to
+    # disable the trace-to-profiles link.
+    tempo_profile_type_id = optional(string, "process_cpu:cpu:nanoseconds:cpu:nanoseconds")
 
     # ClickHouse integration — configure the grafana-clickhouse-datasource plugin
     clickhouse_datasource = optional(object({
