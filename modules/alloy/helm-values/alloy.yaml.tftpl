@@ -86,21 +86,9 @@ alloy:
 %{ endif ~}
       otelcol.processor.batch "default" {
         output {
-%{ if mimir_endpoint != "" ~}
-          metrics = [otelcol.exporter.prometheus.default.input]
-%{ else ~}
-          metrics = [otelcol.exporter.debug.default.input]
-%{ endif ~}
-%{ if loki_endpoint != "" ~}
-          logs    = [otelcol.exporter.loki.default.input]
-%{ else ~}
-          logs    = [otelcol.exporter.debug.default.input]
-%{ endif ~}
-%{ if tempo_endpoint != "" ~}
-          traces  = [otelcol.exporter.otlp.tempo.input]
-%{ else ~}
-          traces  = [otelcol.exporter.debug.default.input]
-%{ endif ~}
+          metrics = [${metrics_outputs}]
+          logs    = [${logs_outputs}]
+          traces  = [${traces_outputs}]
         }
       }
 

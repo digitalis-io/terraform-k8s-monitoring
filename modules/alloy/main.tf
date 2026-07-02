@@ -1,6 +1,26 @@
 locals {
   faro_enabled = try(var.alloy.faro_receiver.enabled, false)
   faro_port    = try(var.alloy.faro_receiver.port, 12347)
+
+  # OTLP-receiver branch (alloy_config = ""): fan out each signal to every
+  # configured destination. mimir/loki/tempo and otel_grpc_endpoint are
+  # independent — set one, the other, or both for a dual-write.
+  _metrics_outputs = compact([
+    var.alloy.mimir_endpoint != "" ? "otelcol.exporter.prometheus.default.input" : "",
+    var.alloy.otel_grpc_endpoint != "" ? "otelcol.exporter.otlp.upstream.input" : "",
+  ])
+  _logs_outputs = compact([
+    var.alloy.loki_endpoint != "" ? "otelcol.exporter.loki.default.input" : "",
+    var.alloy.otel_grpc_endpoint != "" ? "otelcol.exporter.otlp.upstream.input" : "",
+  ])
+  _traces_outputs = compact([
+    var.alloy.tempo_endpoint != "" ? "otelcol.exporter.otlp.tempo.input" : "",
+    var.alloy.otel_grpc_endpoint != "" ? "otelcol.exporter.otlp.upstream.input" : "",
+  ])
+
+  metrics_outputs = length(local._metrics_outputs) > 0 ? join(", ", local._metrics_outputs) : "otelcol.exporter.debug.default.input"
+  logs_outputs    = length(local._logs_outputs) > 0 ? join(", ", local._logs_outputs) : "otelcol.exporter.debug.default.input"
+  traces_outputs  = length(local._traces_outputs) > 0 ? join(", ", local._traces_outputs) : "otelcol.exporter.debug.default.input"
 }
 
 resource "kubernetes_namespace" "alloy" {
@@ -58,6 +78,11 @@ resource "helm_release" "alloy" {
       mimir_tenant_id    = var.alloy.mimir_tenant_id
       pyroscope_endpoint = var.alloy.pyroscope_endpoint
       otel_grpc_endpoint = var.alloy.otel_grpc_endpoint
+
+      # Pre-computed fan-out lists for the OTLP-receiver branch
+      metrics_outputs = local.metrics_outputs
+      logs_outputs    = local.logs_outputs
+      traces_outputs  = local.traces_outputs
 
       # Persistence
       persistence_enabled       = try(var.alloy.persistence.enabled, false)

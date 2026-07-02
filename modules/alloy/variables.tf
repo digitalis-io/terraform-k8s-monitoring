@@ -82,7 +82,7 @@ variable "alloy" {
     mimir_endpoint     = optional(string, "") # e.g. module.mimir.remote_write_endpoint
     mimir_tenant_id    = optional(string, "anonymous")
     pyroscope_endpoint = optional(string, "") # e.g. module.pyroscope.push_url
-    otel_grpc_endpoint = optional(string, "") # e.g. module.otel.otlp_grpc_endpoint
+    otel_grpc_endpoint = optional(string, "") # e.g. module.otel.otlp_grpc_endpoint -- fans out alongside mimir/loki/tempo_endpoint (set any combination for direct-only, otel-only, or dual-write). Only honored by the OTLP-receiver config (faro_receiver.enabled = false); the Faro branch always sends logs/traces direct to loki/tempo_endpoint.
 
     # Annotations added to the Alloy ServiceAccount.
     # Use for IRSA, GKE Workload Identity, or Azure Workload Identity.
