@@ -479,9 +479,13 @@ module "alloy" {
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
 | `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
+| `release_name` | `"alloy"` | Helm release name — override to deploy a second Alloy-based release into the same namespace without colliding (e.g. a Faro receiver gateway alongside a daemonset collector — see below) |
 | `controller_type` | `"daemonset"` | Kubernetes workload kind: `daemonset`, `deployment`, or `statefulset` |
 | `replicas` | `1` | Replica count (ignored when `controller_type = "daemonset"`) |
-| `alloy_config` | `""` | Full River/Alloy pipeline config. When empty, a built-in default config is rendered using the non-empty sibling endpoints below |
+| `alloy_config` | `""` | Full River/Alloy pipeline config. When empty, a built-in default config is rendered — either the OTLP receiver below, or the Faro receiver when `faro_receiver.enabled = true` |
+| `faro_receiver.enabled` | `false` | Opt-in [Grafana Faro](https://grafana.com/oss/faro/) real-user-monitoring (RUM) receiver. Grafana does not publish a standalone "faro" Helm chart — enabling this swaps the built-in config to Alloy's `faro.receiver` component instead of the OTLP receiver. Faro has no metrics output, so `mimir_endpoint` is not used when enabled. Pair with `controller_type = "deployment"` and a distinct `release_name` to run it alongside a separate daemonset collector |
+| `faro_receiver.port` | `12347` | HTTP port the Faro receiver listens on for browser SDK payloads (only used when `faro_receiver.enabled = true`) |
+| `extra_ports` | OTLP gRPC/HTTP (4317/4318), or Faro's `port` when `faro_receiver.enabled = true` | List of `{ name, port, target_port, protocol }` objects exposed on the Alloy pod/Service. Override when `alloy_config` wires a component that listens on its own port |
 | `loki_endpoint` | `""` | Loki push URL — use `module.loki.datasource_url` |
 | `tempo_endpoint` | `""` | Tempo OTLP gRPC endpoint — use `module.tempo.otlp_grpc_endpoint` |
 | `mimir_endpoint` | `""` | Mimir remote write URL — use `module.mimir.remote_write_endpoint` |
@@ -491,7 +495,7 @@ module "alloy" {
 | `persistence.enabled` | `false` | Mount a PVC for WAL state (only meaningful with `controller_type = "statefulset"`) |
 | `persistence.size` | `"10Gi"` | PVC size |
 | `persistence.storage_class` | `""` | StorageClass name (cluster default if empty) |
-| `ingress.enabled` | `false` | Expose Alloy via an Ingress |
+| `ingress.enabled` | `false` | Expose the Faro receiver via an Ingress. Requires `faro_receiver.enabled = true` — the chart's ingress feature always targets a fixed Faro port, regardless of any other component |
 | `ingress.host` | `""` | Ingress hostname (required when `ingress.enabled = true`) |
 | `ingress.class_name` | `"nginx"` | Ingress class |
 | `ingress.tls_secret` | `""` | TLS secret name |
@@ -510,6 +514,42 @@ Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limi
 | `namespace` | Namespace where Alloy is deployed |
 | `helm_release_name` | Helm release name |
 | `helm_release_version` | Deployed chart version |
+| `helm_release_id` | Helm release ID — dependency anchor for other modules |
+| `faro_receiver_http_endpoint` | In-cluster HTTP endpoint for the Faro Web SDK `baseUrl` — set only when `faro_receiver.enabled = true`, empty string otherwise |
+| `faro_receiver_public_url` | Public HTTPS/HTTP URL — set only when `faro_receiver.enabled = true` and `ingress.enabled = true`, empty string otherwise |
+
+**Faro receiver example** — a Deployment-mode gateway accepting browser RUM telemetry, deployed alongside a separate daemonset collector in the same namespace:
+
+```hcl
+module "alloy" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/alloy"
+  alloy = {
+    namespace        = "monitoring"
+    controller_type  = "daemonset"
+    tempo_endpoint   = module.tempo.otlp_grpc_endpoint
+    loki_endpoint    = module.loki.datasource_url
+  }
+}
+
+module "faro_receiver" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/alloy"
+  alloy = {
+    release_name      = "faro-receiver"
+    namespace         = "monitoring"
+    create_namespace  = false
+    controller_type   = "deployment"
+    replicas          = 2
+    faro_receiver     = { enabled = true }
+    tempo_endpoint    = module.tempo.otlp_grpc_endpoint
+    loki_endpoint     = module.loki.datasource_url
+    ingress = {
+      enabled    = true
+      host       = "faro.example.com"
+      tls_secret = "faro-tls"
+    }
+  }
+}
+```
 
 ---
 

@@ -104,7 +104,7 @@ jobs:
           tofu -chdir=modules/alloy show -json plan-defaults.binary > /tmp/plan-defaults.json
 
       - name: Compliance — defaults
-        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-defaults.json
+        run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-defaults.json
 
       - name: Plan — with ingress fixture
         run: |
@@ -114,7 +114,17 @@ jobs:
           tofu -chdir=modules/alloy show -json plan-ingress.binary > /tmp/plan-ingress.json
 
       - name: Compliance — with ingress
-        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-ingress.json
+        run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-ingress.json
+
+      - name: Plan — faro receiver fixture
+        run: |
+          tofu -chdir=modules/alloy plan \
+            -var-file=../../tests/compliance/fixtures/faro_receiver.tfvars \
+            -out=plan-faro.binary
+          tofu -chdir=modules/alloy show -json plan-faro.binary > /tmp/plan-faro.json
+
+      - name: Compliance — faro receiver
+        run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-faro.json
 
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:

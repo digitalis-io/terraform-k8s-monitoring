@@ -2,7 +2,66 @@ alloy:
   configMap:
     content: |
 %{ if alloy_config != "" ~}
-${ indent(6, alloy_config) }
+      ${indent(6, alloy_config)}
+%{ else ~}
+%{ if faro_enabled ~}
+      // Faro receiver — accepts RUM telemetry (errors, traces, logs, web-vitals)
+      // from the Grafana Faro Web SDK running in browsers. No metrics output:
+      // faro.receiver only emits logs and traces.
+      faro.receiver "default" {
+        server {
+          listen_address = "0.0.0.0"
+          listen_port    = ${faro_port}
+        }
+
+        sourcemaps { }
+
+        output {
+          logs   = [otelcol.processor.batch.default.input]
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.batch "default" {
+        output {
+%{ if loki_endpoint != "" ~}
+          logs   = [otelcol.exporter.loki.default.input]
+%{ else ~}
+          logs   = [otelcol.exporter.debug.default.input]
+%{ endif ~}
+%{ if tempo_endpoint != "" ~}
+          traces = [otelcol.exporter.otlp.tempo.input]
+%{ else ~}
+          traces = [otelcol.exporter.debug.default.input]
+%{ endif ~}
+        }
+      }
+
+      otelcol.exporter.debug "default" {
+        verbosity = "basic"
+      }
+
+%{ if tempo_endpoint != "" ~}
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "${tempo_endpoint}"
+          tls { insecure = true }
+        }
+      }
+
+%{ endif ~}
+%{ if loki_endpoint != "" ~}
+      otelcol.exporter.loki "default" {
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "${loki_endpoint}/loki/api/v1/push"
+        }
+      }
+
+%{ endif ~}
 %{ else ~}
       // OTLP receiver — accepts traces, metrics, and logs from instrumented applications
       otelcol.receiver.otlp "default" {
@@ -94,6 +153,7 @@ ${ indent(6, alloy_config) }
 
 %{ endif ~}
 %{ endif ~}
+%{ endif ~}
   controller:
     type: ${controller_type}
 %{ if controller_type != "daemonset" ~}
@@ -107,14 +167,12 @@ ${ indent(6, alloy_config) }
 %{ endif ~}
 
   extraPorts:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-      protocol: TCP
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
-      protocol: TCP
+%{ for p in extra_ports ~}
+    - name: ${p.name}
+      port: ${p.port}
+      targetPort: ${p.target_port}
+      protocol: ${p.protocol}
+%{ endfor ~}
 
   resources:
     requests:
@@ -151,6 +209,12 @@ ${ indent(6, alloy_config) }
 ingress:
   enabled: true
   ingressClassName: ${ingress_class_name}
+%{ if faro_enabled ~}
+  # The chart's ingress feature always targets this fixed Faro port,
+  # regardless of any other component ports — it is not a general-purpose
+  # ingress for arbitrary Alloy signals.
+  faroPort: ${faro_port}
+%{ endif ~}
 %{ if length(ingress_annotations) > 0 ~}
   annotations:
 %{ for key, value in ingress_annotations ~}

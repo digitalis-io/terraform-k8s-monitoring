@@ -1,3 +1,8 @@
+locals {
+  faro_enabled = try(var.alloy.faro_receiver.enabled, false)
+  faro_port    = try(var.alloy.faro_receiver.port, 12347)
+}
+
 resource "kubernetes_namespace" "alloy" {
   count = var.alloy.create_namespace ? 1 : 0
 
@@ -15,7 +20,7 @@ resource "kubernetes_namespace" "alloy" {
 }
 
 resource "helm_release" "alloy" {
-  name       = "alloy"
+  name       = var.alloy.release_name
   repository = "https://grafana.github.io/helm-charts"
   chart      = "alloy"
   version    = var.alloy.chart_version
@@ -33,6 +38,18 @@ resource "helm_release" "alloy" {
 
       # Alloy pipeline config
       alloy_config = var.alloy.alloy_config
+      faro_enabled = local.faro_enabled
+      faro_port    = local.faro_port
+
+      # Ports
+      extra_ports = length(var.alloy.extra_ports) > 0 ? var.alloy.extra_ports : (
+        local.faro_enabled
+        ? [{ name = "faro-http", port = local.faro_port, target_port = local.faro_port, protocol = "TCP" }]
+        : [
+          { name = "otlp-grpc", port = 4317, target_port = 4317, protocol = "TCP" },
+          { name = "otlp-http", port = 4318, target_port = 4318, protocol = "TCP" },
+        ]
+      )
 
       # Sibling endpoints (used in built-in config when alloy_config = "")
       loki_endpoint      = var.alloy.loki_endpoint

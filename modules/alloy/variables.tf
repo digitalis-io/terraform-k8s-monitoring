@@ -8,6 +8,11 @@ variable "alloy" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
 
+    # Helm release name. Override when deploying more than one Alloy-based
+    # release into the same namespace (e.g. a daemonset collector alongside a
+    # deployment-mode gateway) so they don't collide.
+    release_name = optional(string, "alloy")
+
     # Controller type determines the Kubernetes workload kind.
     # "daemonset"   — one pod per node; use for log/metric collection from every node
     # "deployment"  — fixed replica count; use for gateway/aggregation role
@@ -23,6 +28,28 @@ variable "alloy" {
     # sibling endpoints automatically. Override with a full config string to take
     # complete control of all pipeline components.
     alloy_config = optional(string, "")
+
+    # Opt-in Grafana Faro real-user-monitoring (RUM) receiver. When enabled and
+    # alloy_config is empty, the built-in default config wires Alloy's
+    # faro.receiver component (instead of the OTLP receiver) listening on
+    # `port`, forwarding logs to loki_endpoint and traces to tempo_endpoint.
+    # faro.receiver has no metrics output, so mimir_endpoint is not used here.
+    # Deploy a second module "alloy" instance with a distinct release_name for
+    # a Faro gateway alongside a separate OTLP daemonset collector.
+    faro_receiver = optional(object({
+      enabled = optional(bool, false)
+      port    = optional(number, 12347) # 1-65535
+    }), {})
+
+    # Additional container ports exposed on the Alloy pod/Service, beyond the
+    # default OTLP gRPC/HTTP ports. Use when alloy_config wires up a component
+    # that listens on its own port (e.g. Alloy's faro.receiver).
+    extra_ports = optional(list(object({
+      name        = string
+      port        = number
+      target_port = number
+      protocol    = optional(string, "TCP")
+    })), [])
 
     # Persistence for WAL state — only meaningful when controller_type = "statefulset"
     persistence = optional(object({
@@ -78,5 +105,18 @@ variable "alloy" {
   validation {
     condition     = !try(var.alloy.ingress.enabled, false) || try(var.alloy.ingress.host, "") != ""
     error_message = "ingress.host is required when ingress.enabled = true."
+  }
+
+  validation {
+    condition     = try(var.alloy.faro_receiver.port, 12347) > 0 && try(var.alloy.faro_receiver.port, 12347) <= 65535
+    error_message = "faro_receiver.port must be a valid TCP port (1-65535)."
+  }
+
+  validation {
+    # The grafana/alloy chart's ingress feature always targets a fixed Faro
+    # port (ingress.faroPort) — it has no general-purpose routing for other
+    # components, so enabling it without faro_receiver.enabled is dead config.
+    condition     = !try(var.alloy.ingress.enabled, false) || try(var.alloy.faro_receiver.enabled, false)
+    error_message = "ingress.enabled requires faro_receiver.enabled = true — the chart's ingress only ever routes to the Faro receiver port."
   }
 }
