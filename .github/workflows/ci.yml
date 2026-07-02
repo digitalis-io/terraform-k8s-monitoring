@@ -126,6 +126,26 @@ jobs:
       - name: Compliance — faro receiver
         run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-faro.json
 
+      - name: Plan — sensitive-data custom rules fixture
+        run: |
+          tofu -chdir=modules/alloy plan \
+            -var-file=../../tests/compliance/fixtures/sensitive_data_custom.tfvars \
+            -out=plan-sensitive-data-custom.binary
+          tofu -chdir=modules/alloy show -json plan-sensitive-data-custom.binary > /tmp/plan-sensitive-data-custom.json
+
+      - name: Compliance — sensitive-data custom rules
+        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-sensitive-data-custom.json
+
+      - name: Plan — sensitive-data disabled fixture
+        run: |
+          tofu -chdir=modules/alloy plan \
+            -var-file=../../tests/compliance/fixtures/sensitive_data_disabled.tfvars \
+            -out=plan-sensitive-data-disabled.binary
+          tofu -chdir=modules/alloy show -json plan-sensitive-data-disabled.binary > /tmp/plan-sensitive-data-disabled.json
+
+      - name: Compliance — sensitive-data disabled
+        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-sensitive-data-disabled.json
+
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
     name: terratest
