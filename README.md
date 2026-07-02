@@ -498,8 +498,51 @@ module "alloy" {
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
 | `extra_values` | `""` | Extra Helm values merged last (highest precedence) |
+| `sensitive_data.enabled` | `true` | Hash or delete matched sensitive attributes on logs, traces, and metrics before export |
+| `sensitive_data.action` | `"hash"` | Default action for matched fields: `"hash"` (SHA256, optionally salted) or `"delete"` |
+| `sensitive_data.default_rules_enabled` | `true` | Include the built-in financial-institution field list (below) |
+| `sensitive_data.custom_rules` | `{}` | Extra `{ "attribute.name" = "hash" \| "delete" }` entries; overrides the default action for shared field names |
+| `sensitive_data.salt` | `""` | Mixed into the hash input so output is deterministic but not a plain unsalted hash |
 
 Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limit.
+
+**Sensitive-data (PII) processor**
+
+Enabled by default. Wires an `otelcol.processor.transform` component into the built-in pipeline (receiver → transform → batch → exporters) that matches known attribute names on log records, spans, and metric datapoints and either hashes (SHA256) or deletes them, per [OpenTelemetry's guidance on handling sensitive data](https://opentelemetry.io/docs/security/handling-sensitive-data/). It matches on attribute keys, not free-text log bodies. `error_mode = "propagate"` is set deliberately — a malformed rule fails the pipeline loudly rather than silently letting unredacted data through.
+
+Default field list is split into two groups (financial-institution oriented):
+- **Secrets/credentials** — always `delete`, regardless of `action`: `password`, `passwd`, `pwd`, `secret`, `api_key`, `apikey`, `token`, `authorization`. A hash of a credential is still a stable, attackable fingerprint of it, so these are never hashed by default.
+- **PII** — subject to the configurable `action`: `card_number`, `credit_card_number`, `credit_card`, `pan`, `cvv`, `cvv2`, `card_cvv`, `ssn`, `social_security_number`, `iban`, `bank_account_number`, `account_number`, `email`, `email_address`.
+
+`custom_rules` overrides either group's action per field name.
+
+**Salt is not a secret.** It is rendered in plaintext into the Alloy ConfigMap (and into Terraform state via the `helm_release` values). It deters trivial rainbow-table reuse of the *same* precomputed table across deployments/fields, but anyone with read access to the ConfigMap or state can recompute hashes for known candidate values (e.g. brute-forcing a 16-digit PAN is infeasible, but a known SSN or email is not). Do not rely on it as a cryptographic secret.
+
+Only applies to the built-in config — a non-empty `alloy_config` takes full control of the pipeline and must wire its own transform processor if needed.
+
+```hcl
+# Defaults only (hash all default fields, no salt)
+alloy = {
+  sensitive_data = {}
+}
+
+# Custom action + salt + extra/overridden fields
+alloy = {
+  sensitive_data = {
+    action = "hash"
+    salt   = "my-org-salt"
+    custom_rules = {
+      "user.ssn"       = "delete" # overrides the default "hash" action
+      "transaction.id" = "hash"   # field not covered by the defaults
+    }
+  }
+}
+
+# Disable entirely
+alloy = {
+  sensitive_data = { enabled = false }
+}
+```
 
 **Outputs:**
 

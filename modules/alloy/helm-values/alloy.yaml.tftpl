@@ -9,12 +9,62 @@ ${ indent(6, alloy_config) }
         grpc { endpoint = "0.0.0.0:4317" }
         http { endpoint = "0.0.0.0:4318" }
         output {
+%{ if sensitive_data_enabled ~}
+          metrics = [otelcol.processor.transform.sensitive_data.input]
+          logs    = [otelcol.processor.transform.sensitive_data.input]
+          traces  = [otelcol.processor.transform.sensitive_data.input]
+%{ else ~}
+          metrics = [otelcol.processor.batch.default.input]
+          logs    = [otelcol.processor.batch.default.input]
+          traces  = [otelcol.processor.batch.default.input]
+%{ endif ~}
+        }
+      }
+
+%{ if sensitive_data_enabled ~}
+      // Sensitive-data processor — hashes or deletes matched attributes before
+      // they reach batching/export. See https://opentelemetry.io/docs/security/handling-sensitive-data/
+      // error_mode = "propagate" is deliberate: this is a PII-redaction control,
+      // so a malformed rule must fail the pipeline loudly rather than silently
+      // let unredacted data through ("ignore"/"silent" would fail open).
+      otelcol.processor.transform "sensitive_data" {
+        error_mode = "propagate"
+
+        log_statements {
+          context = "log"
+          statements = [
+%{ for statement in sensitive_data_statements ~}
+            "${statement}",
+%{ endfor ~}
+          ]
+        }
+
+        trace_statements {
+          context = "span"
+          statements = [
+%{ for statement in sensitive_data_statements ~}
+            "${statement}",
+%{ endfor ~}
+          ]
+        }
+
+        metric_statements {
+          context = "datapoint"
+          statements = [
+%{ for statement in sensitive_data_statements ~}
+            "${statement}",
+%{ endfor ~}
+          ]
+        }
+
+        output {
           metrics = [otelcol.processor.batch.default.input]
           logs    = [otelcol.processor.batch.default.input]
           traces  = [otelcol.processor.batch.default.input]
         }
       }
 
+%{ endif ~}
 %{ if otel_grpc_endpoint != "" ~}
       // Forward all signals to an upstream OTel Collector aggregator
       otelcol.exporter.otlp "upstream" {

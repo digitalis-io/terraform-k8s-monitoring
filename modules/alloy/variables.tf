@@ -67,6 +67,20 @@ variable "alloy" {
 
     # Arbitrary extra Helm values merged last; highest precedence over the template.
     extra_values = optional(string, "")
+
+    # Sensitive-data (PII) processor — hashes or deletes matched attributes on logs,
+    # traces, and metrics before export. See https://opentelemetry.io/docs/security/handling-sensitive-data/
+    # Enabled by default with a financial-institution-oriented ruleset (credit card
+    # numbers, CVV, passwords/secrets/tokens, SSNs, IBANs/bank accounts, email
+    # addresses). Only wired into the built-in config; a non-empty alloy_config
+    # takes full control and must handle redaction itself.
+    sensitive_data = optional(object({
+      enabled               = optional(bool, true)
+      action                = optional(string, "hash") # "hash" or "delete"
+      default_rules_enabled = optional(bool, true)
+      custom_rules          = optional(map(string), {}) # { "attribute.name" = "hash" | "delete" }
+      salt                  = optional(string, "")      # mixed into the hash for deterministic, non-rainbow-table-able output
+    }), {})
   })
   default = {}
 
@@ -78,5 +92,17 @@ variable "alloy" {
   validation {
     condition     = !try(var.alloy.ingress.enabled, false) || try(var.alloy.ingress.host, "") != ""
     error_message = "ingress.host is required when ingress.enabled = true."
+  }
+
+  validation {
+    condition     = contains(["hash", "delete"], try(var.alloy.sensitive_data.action, "hash"))
+    error_message = "sensitive_data.action must be 'hash' or 'delete'."
+  }
+
+  validation {
+    condition = alltrue([
+      for action in values(try(var.alloy.sensitive_data.custom_rules, {})) : contains(["hash", "delete"], action)
+    ])
+    error_message = "sensitive_data.custom_rules values must be 'hash' or 'delete'."
   }
 }

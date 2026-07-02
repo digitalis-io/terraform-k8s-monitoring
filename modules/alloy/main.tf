@@ -1,3 +1,55 @@
+locals {
+  # Default field names scanned by the sensitive-data processor when
+  # sensitive_data.default_rules_enabled = true. Attribute-key based (not
+  # free-text body scanning) — matches attributes/resource attributes emitted
+  # by instrumented apps using these or similar names.
+  #
+  # Secrets/credentials always default to "delete": a hash of a password or
+  # API key is still a stable fingerprint of it and offers no legitimate use
+  # once captured, so unlike PII (which may need a stable pseudonymous
+  # correlation id) they are never hashed by default. custom_rules can still
+  # override this per field.
+  alloy_sensitive_data_secret_fields = try(var.alloy.sensitive_data.default_rules_enabled, true) ? [
+    "password", "passwd", "pwd", "secret", "api_key", "apikey", "token", "authorization",
+  ] : []
+
+  # PII fields subject to the configurable sensitive_data.action (hash or delete).
+  alloy_sensitive_data_pii_fields = try(var.alloy.sensitive_data.default_rules_enabled, true) ? [
+    "card_number", "credit_card_number", "credit_card", "pan",
+    "cvv", "cvv2", "card_cvv",
+    "ssn", "social_security_number",
+    "iban", "bank_account_number", "account_number",
+    "email", "email_address",
+  ] : []
+
+  alloy_sensitive_data_default_rules = merge(
+    { for field in local.alloy_sensitive_data_secret_fields : field => "delete" },
+    { for field in local.alloy_sensitive_data_pii_fields : field => try(var.alloy.sensitive_data.action, "hash") },
+  )
+
+  # custom_rules takes precedence over defaults for shared field names
+  alloy_sensitive_data_rules = merge(
+    local.alloy_sensitive_data_default_rules,
+    try(var.alloy.sensitive_data.custom_rules, {}),
+  )
+
+  # OTTL statements are identical across log/span/datapoint contexts (all
+  # address an "attributes" map), so they're computed once here and looped
+  # into all three context blocks in the template instead of being
+  # duplicated three times in the .tftpl.
+  alloy_sensitive_data_salt = try(var.alloy.sensitive_data.salt, "")
+  alloy_sensitive_data_statements = [
+    for field, action in local.alloy_sensitive_data_rules :
+    action == "delete" ? (
+      "delete_key(attributes, \"${field}\")"
+      ) : (
+      local.alloy_sensitive_data_salt != "" ?
+      "set(attributes[\"${field}\"], SHA256(Concat([attributes[\"${field}\"], \"${local.alloy_sensitive_data_salt}\"], \"\"))) where attributes[\"${field}\"] != nil" :
+      "set(attributes[\"${field}\"], SHA256(attributes[\"${field}\"])) where attributes[\"${field}\"] != nil"
+    )
+  ]
+}
+
 resource "kubernetes_namespace" "alloy" {
   count = var.alloy.create_namespace ? 1 : 0
 
@@ -62,6 +114,10 @@ resource "helm_release" "alloy" {
       ingress_annotations = try(var.alloy.ingress.annotations, {})
 
       service_account_annotations = var.alloy.service_account_annotations
+
+      # Sensitive-data (PII) processor
+      sensitive_data_enabled    = try(var.alloy.sensitive_data.enabled, true)
+      sensitive_data_statements = local.alloy_sensitive_data_statements
     }),
     var.alloy.extra_values,
   ])
