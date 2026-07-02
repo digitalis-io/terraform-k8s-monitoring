@@ -267,6 +267,152 @@ func TestAlloyOutputsHaveOTLPEndpoints(t *testing.T) {
 	assert.Contains(t, content, "4318", "otlp_http_endpoint must reference port 4318")
 }
 
+// TestAlloyModuleValidateSensitiveDataCustomRules verifies that custom_rules
+// entries with valid "hash"/"delete" actions are accepted.
+func TestAlloyModuleValidateSensitiveDataCustomRules(t *testing.T) {
+	t.Parallel()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../modules/alloy",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+		Vars: map[string]interface{}{
+			"alloy": map[string]interface{}{
+				"sensitive_data": map[string]interface{}{
+					"action": "hash",
+					"salt":   "test-salt",
+					"custom_rules": map[string]interface{}{
+						"user.ssn":       "delete",
+						"transaction.id": "hash",
+					},
+				},
+			},
+		},
+	}
+
+	terraform.InitAndValidate(t, opts)
+}
+
+// TestAlloyModuleValidateSensitiveDataDisabled verifies that the processor
+// can be explicitly disabled.
+func TestAlloyModuleValidateSensitiveDataDisabled(t *testing.T) {
+	t.Parallel()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../modules/alloy",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+		Vars: map[string]interface{}{
+			"alloy": map[string]interface{}{
+				"sensitive_data": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+		},
+	}
+
+	terraform.InitAndValidate(t, opts)
+}
+
+// TestAlloyModuleRejectsInvalidSensitiveDataAction verifies that an
+// out-of-enum sensitive_data.action fails validation with a clear error.
+func TestAlloyModuleRejectsInvalidSensitiveDataAction(t *testing.T) {
+	t.Parallel()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../modules/alloy",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+		Vars: map[string]interface{}{
+			"alloy": map[string]interface{}{
+				"sensitive_data": map[string]interface{}{
+					"action": "encrypt",
+				},
+			},
+		},
+	}
+
+	terraform.Init(t, opts)
+	_, err := terraform.PlanE(t, opts)
+	require.Error(t, err, "plan must fail when sensitive_data.action is not 'hash' or 'delete'")
+	assert.Contains(t, err.Error(), "sensitive_data.action must be 'hash' or 'delete'")
+}
+
+// TestAlloyModuleRejectsInvalidSensitiveDataCustomRuleAction verifies that an
+// out-of-enum action in custom_rules fails validation.
+func TestAlloyModuleRejectsInvalidSensitiveDataCustomRuleAction(t *testing.T) {
+	t.Parallel()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../modules/alloy",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+		Vars: map[string]interface{}{
+			"alloy": map[string]interface{}{
+				"sensitive_data": map[string]interface{}{
+					"custom_rules": map[string]interface{}{
+						"user.ssn": "encrypt",
+					},
+				},
+			},
+		},
+	}
+
+	terraform.Init(t, opts)
+	_, err := terraform.PlanE(t, opts)
+	require.Error(t, err, "plan must fail when a custom_rules action is not 'hash' or 'delete'")
+	assert.Contains(t, err.Error(), "sensitive_data.custom_rules values must be 'hash' or 'delete'")
+}
+
+// TestAlloyTemplateHasSensitiveDataProcessor verifies that the Helm values
+// template wires the sensitive-data transform processor into the built-in
+// pipeline and routes the receiver through it when enabled.
+func TestAlloyTemplateHasSensitiveDataProcessor(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile("../modules/alloy/helm-values/alloy.yaml.tftpl")
+	require.NoError(t, err, "alloy helm values template must exist")
+
+	tmpl := string(content)
+	assert.Contains(t, tmpl, `otelcol.processor.transform "sensitive_data"`, "template must declare the sensitive-data transform processor")
+	assert.Contains(t, tmpl, "otelcol.processor.transform.sensitive_data.input", "receiver must route through the transform processor when enabled")
+	assert.Contains(t, tmpl, "sensitive_data_statements", "template must iterate over the precomputed sensitive_data_statements list")
+	assert.Contains(t, tmpl, `error_mode = "propagate"`, "processor must fail loudly (not fail open) on a malformed rule")
+
+	main, err := os.ReadFile("../modules/alloy/main.tf")
+	require.NoError(t, err, "main.tf must exist")
+
+	mainContent := string(main)
+	assert.Contains(t, mainContent, "delete_key(attributes", "main.tf must generate the delete action statement")
+	assert.Contains(t, mainContent, "SHA256(", "main.tf must generate the hash action statement")
+	assert.Contains(t, mainContent, "alloy_sensitive_data_salt", "main.tf must support salting the hash")
+}
+
+// TestAlloyVariablesHaveSensitiveDataValidation verifies that variables.tf
+// declares validation blocks for sensitive_data.action and custom_rules values.
+func TestAlloyVariablesHaveSensitiveDataValidation(t *testing.T) {
+	t.Parallel()
+
+	vars, err := os.ReadFile("../modules/alloy/variables.tf")
+	require.NoError(t, err, "variables.tf must exist")
+
+	content := string(vars)
+	assert.Contains(t, content, "sensitive_data.action must be", "variables.tf must validate sensitive_data.action against the allowed set")
+	assert.Contains(t, content, "sensitive_data.custom_rules values must be", "variables.tf must validate sensitive_data.custom_rules action values")
+}
+
+// TestAlloyVariablesSensitiveDataEnabledByDefault verifies that the
+// sensitive-data processor defaults to enabled.
+func TestAlloyVariablesSensitiveDataEnabledByDefault(t *testing.T) {
+	t.Parallel()
+
+	vars, err := os.ReadFile("../modules/alloy/variables.tf")
+	require.NoError(t, err, "variables.tf must exist")
+
+	content := string(vars)
+	assert.Contains(t, content, `enabled               = optional(bool, true)`, "sensitive_data.enabled must default to true")
+}
+
 // TestAlloyExampleValidate verifies that examples/alloy-basic passes
 // terraform validate. Requires Terraform >= 1.9 (mimir module constraint).
 func TestAlloyExampleValidate(t *testing.T) {
