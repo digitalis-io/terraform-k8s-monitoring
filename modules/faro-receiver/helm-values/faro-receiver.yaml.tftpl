@@ -1,0 +1,114 @@
+alloy:
+  configMap:
+    content: |
+%{ if faro_config != "" ~}
+${ indent(6, faro_config) }
+%{ else ~}
+      // Faro receiver — accepts RUM telemetry (errors, traces, logs, web-vitals)
+      // from the Grafana Faro Web SDK running in browsers.
+      faro.receiver "default" {
+        server {
+          listen_address = "0.0.0.0"
+          listen_port    = ${port}
+        }
+
+        sourcemaps { }
+
+        output {
+          logs   = [otelcol.processor.batch.default.input]
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.batch "default" {
+        output {
+%{ if loki_endpoint != "" ~}
+          logs   = [otelcol.exporter.loki.default.input]
+%{ else ~}
+          logs   = [otelcol.exporter.debug.default.input]
+%{ endif ~}
+%{ if tempo_endpoint != "" ~}
+          traces = [otelcol.exporter.otlp.tempo.input]
+%{ else ~}
+          traces = [otelcol.exporter.debug.default.input]
+%{ endif ~}
+        }
+      }
+
+      otelcol.exporter.debug "default" {
+        verbosity = "basic"
+      }
+
+%{ if tempo_endpoint != "" ~}
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "${tempo_endpoint}"
+          tls { insecure = true }
+        }
+      }
+
+%{ endif ~}
+%{ if loki_endpoint != "" ~}
+      otelcol.exporter.loki "default" {
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "${loki_endpoint}/loki/api/v1/push"
+        }
+      }
+
+%{ endif ~}
+%{ endif ~}
+  controller:
+    type: ${controller_type}
+    replicas: ${replicas}
+
+  storagePath: /tmp/alloy
+
+  extraPorts:
+    - name: faro-http
+      port: ${port}
+      targetPort: ${port}
+      protocol: TCP
+
+  resources:
+    requests:
+      cpu: ${requests_cpu}
+      memory: ${requests_memory}
+    limits:
+      cpu: ${limits_cpu}
+      memory: ${limits_memory}
+
+%{ if length(service_account_annotations) > 0 ~}
+  serviceAccount:
+    create: true
+    annotations:
+%{ for key, value in service_account_annotations ~}
+      ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+
+%{ if ingress_enabled ~}
+ingress:
+  enabled: true
+  ingressClassName: ${ingress_class_name}
+%{ if length(ingress_annotations) > 0 ~}
+  annotations:
+%{ for key, value in ingress_annotations ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+  hosts:
+    - host: ${ingress_host}
+      paths:
+        - path: /
+          pathType: Prefix
+%{ if ingress_tls_secret != "" ~}
+  tls:
+    - hosts:
+        - ${ingress_host}
+      secretName: ${ingress_tls_secret}
+%{ endif ~}
+%{ endif ~}

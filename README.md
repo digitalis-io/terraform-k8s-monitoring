@@ -26,6 +26,7 @@ Metrics (Mimir), logs (Loki), traces (Tempo), collection (OpenTelemetry Collecto
   - [tempo](#tempo)
   - [otel-collector](#otel-collector)
   - [alloy](#alloy)
+  - [faro-receiver](#faro-receiver)
   - [pyroscope](#pyroscope)
   - [prometheus-rules](#prometheus-rules)
   - [grafana-rules](#grafana-rules)
@@ -502,6 +503,65 @@ Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limi
 | `namespace` | Namespace where Alloy is deployed |
 | `helm_release_name` | Helm release name |
 | `helm_release_version` | Deployed chart version |
+
+---
+
+### faro-receiver
+
+Installs a [Grafana Faro](https://grafana.com/oss/faro/) real-user-monitoring (RUM) receiver. Deployed via the `grafana/alloy` Helm chart configured with Alloy's `faro.receiver` component — Grafana does not publish a standalone "faro" Helm chart. Accepts RUM telemetry (JS errors, traces, logs, web-vitals) shipped by the Faro Web SDK running in browsers, and forwards traces to Tempo and logs to Loki. Runs as a Deployment (stateless RUM gateway); DaemonSet and StatefulSet are not supported.
+
+```hcl
+module "faro_receiver" {
+  source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/faro-receiver"
+
+  faro_receiver = {
+    namespace       = "monitoring"
+    create_namespace = false
+    tempo_endpoint  = module.tempo.otlp_grpc_endpoint
+    loki_endpoint   = module.loki.datasource_url
+    ingress = {
+      enabled    = true
+      host       = "faro.example.com"
+      tls_secret = "faro-tls"
+    }
+  }
+}
+```
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `chart_version` | `"0.12.5"` | grafana/alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `namespace` | `"monitoring"` | Namespace to deploy into |
+| `create_namespace` | `true` | Create the namespace if it does not exist |
+| `namespace_labels` | `{}` | Additional labels to apply to the namespace |
+| `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
+| `controller_type` | `"deployment"` | Kubernetes workload kind — only `deployment` is supported |
+| `replicas` | `2` | Replica count |
+| `port` | `12347` | HTTP port the Faro receiver listens on for browser SDK payloads |
+| `faro_config` | `""` | Full River/Alloy pipeline config. When empty, a built-in `faro.receiver` config is rendered using the non-empty sibling endpoints below |
+| `tempo_endpoint` | `""` | Tempo OTLP gRPC endpoint — use `module.tempo.otlp_grpc_endpoint` |
+| `loki_endpoint` | `""` | Loki push URL — use `module.loki.datasource_url` |
+| `ingress.enabled` | `false` | Expose the Faro receiver via an Ingress — required for browser SDKs running outside the cluster |
+| `ingress.host` | `""` | Ingress hostname (required when `ingress.enabled = true`) |
+| `ingress.class_name` | `"nginx"` | Ingress class |
+| `ingress.tls_secret` | `""` | TLS secret name |
+| `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
+| `resources` | see below | CPU/memory requests and limits |
+| `extra_values` | `""` | Extra Helm values merged last (highest precedence) |
+
+Default resources: 100m CPU / 128Mi memory request, 500m CPU / 512Mi memory limit.
+
+**Outputs:**
+
+| Output | Description |
+| --- | --- |
+| `receiver_http_endpoint` | In-cluster HTTP endpoint for the Faro Web SDK `baseUrl` — `http://faro-receiver.<namespace>.svc.cluster.local:12347/collect` |
+| `receiver_public_url` | Public HTTPS/HTTP URL when ingress is enabled, empty string otherwise |
+| `namespace` | Namespace where the Faro receiver is deployed |
+| `helm_release_name` | Helm release name |
+| `helm_release_version` | Deployed chart version |
+| `helm_release_id` | Helm release ID — dependency anchor for other modules |
+| `service_name` | Kubernetes Service name |
 
 ---
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modules/faro-receiver`: new module — Grafana Faro real-user-monitoring (RUM) receiver for ingesting frontend telemetry (JS errors, traces, logs, web-vitals) and forwarding signals into Tempo (traces) and Loki (logs). Deployed via the grafana/alloy chart configured with Alloy's `faro.receiver` component; runs as a Deployment with optional ingress for browser SDKs.
 - `modules/alloy`: new module — Grafana Alloy collector (daemonset/deployment/statefulset) with River/Alloy pipeline config, sibling-module integration hooks for Loki, Tempo, Mimir, Pyroscope, and OTel Collector, and WAL persistence support for statefulset mode.
 - `examples/alloy-basic`: minimal example wiring Alloy as a daemonset collector forwarding OTLP signals to Loki, Tempo, and Mimir.
 - `modules/otel-collector`: ClickHouse exporter support via new `clickhouse_endpoint`, `clickhouse_username`, `clickhouse_password`, `clickhouse_database`, and `clickhouse_create_schema` variables. Logs and traces can now be forwarded to ClickHouse alongside (or instead of) Loki/Tempo.

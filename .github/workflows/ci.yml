@@ -57,6 +57,7 @@ jobs:
         module:
           - modules/alloy
           - modules/cert-manager
+          - modules/faro-receiver
           - modules/grafana-rules
           - modules/loki
           - modules/mimir
@@ -104,7 +105,7 @@ jobs:
           tofu -chdir=modules/alloy show -json plan-defaults.binary > /tmp/plan-defaults.json
 
       - name: Compliance — defaults
-        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-defaults.json
+        run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-defaults.json
 
       - name: Plan — with ingress fixture
         run: |
@@ -114,7 +115,30 @@ jobs:
           tofu -chdir=modules/alloy show -json plan-ingress.binary > /tmp/plan-ingress.json
 
       - name: Compliance — with ingress
-        run: terraform-compliance -f tests/compliance/features -p /tmp/plan-ingress.json
+        run: terraform-compliance -f tests/compliance/features/alloy -p /tmp/plan-ingress.json
+
+      - name: Init faro-receiver module
+        run: tofu -chdir=modules/faro-receiver init -backend=false
+
+      - name: Plan — faro-receiver defaults fixture
+        run: |
+          tofu -chdir=modules/faro-receiver plan \
+            -var-file=../../tests/compliance/fixtures/faro_defaults.tfvars \
+            -out=plan-faro-defaults.binary
+          tofu -chdir=modules/faro-receiver show -json plan-faro-defaults.binary > /tmp/plan-faro-defaults.json
+
+      - name: Compliance — faro-receiver defaults
+        run: terraform-compliance -f tests/compliance/features/faro-receiver -p /tmp/plan-faro-defaults.json
+
+      - name: Plan — faro-receiver with ingress fixture
+        run: |
+          tofu -chdir=modules/faro-receiver plan \
+            -var-file=../../tests/compliance/fixtures/faro_with_ingress.tfvars \
+            -out=plan-faro-ingress.binary
+          tofu -chdir=modules/faro-receiver show -json plan-faro-ingress.binary > /tmp/plan-faro-ingress.json
+
+      - name: Compliance — faro-receiver with ingress
+        run: terraform-compliance -f tests/compliance/features/faro-receiver -p /tmp/plan-faro-ingress.json
 
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
@@ -136,7 +160,7 @@ jobs:
       - name: Seed provider cache
         run: |
           mkdir -p /tmp/tf-plugin-cache
-          for dir in modules/alloy modules/mimir modules/prometheus; do
+          for dir in modules/alloy modules/faro-receiver modules/mimir modules/prometheus; do
             tofu -chdir="$dir" init -backend=false
           done
         env:
