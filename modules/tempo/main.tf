@@ -77,6 +77,7 @@ resource "helm_release" "tempo" {
       s3_path_style      = var.tempo.storage.s3_path_style
       s3_access_key      = var.tempo.storage.s3_access_key
       s3_secret_key      = var.tempo.storage.s3_secret_key
+      s3_key_prefix      = var.tempo.storage.s3_key_prefix
       use_s3_secret      = local.tempo_s3_secret != null
       s3_secret_name     = local.tempo_s3_secret != null ? local.tempo_s3_secret.name : ""
       s3_secret_ak_field = local.tempo_s3_secret != null ? local.tempo_s3_secret.access_key_field : ""

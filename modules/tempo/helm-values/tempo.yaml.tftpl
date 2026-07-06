@@ -13,6 +13,9 @@ tempo:
       s3:
         bucket: ${s3_bucket}
         region: ${s3_region}
+%{ if s3_key_prefix != "" ~}
+        prefix: ${s3_key_prefix}
+%{ endif ~}
 %{ if s3_endpoint != "" ~}
         endpoint: ${s3_endpoint}
         insecure: ${s3_insecure}

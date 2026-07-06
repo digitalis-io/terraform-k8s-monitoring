@@ -78,6 +78,7 @@ resource "helm_release" "pyroscope" {
       s3_insecure        = var.pyroscope.storage.s3_insecure
       s3_access_key      = var.pyroscope.storage.s3_access_key
       s3_secret_key      = var.pyroscope.storage.s3_secret_key
+      s3_key_prefix      = var.pyroscope.storage.s3_key_prefix
       use_s3_secret      = local.pyroscope_s3_secret != null
       s3_secret_name     = local.pyroscope_s3_secret != null ? local.pyroscope_s3_secret.name : ""
       s3_secret_ak_field = local.pyroscope_s3_secret != null ? local.pyroscope_s3_secret.access_key_field : ""
