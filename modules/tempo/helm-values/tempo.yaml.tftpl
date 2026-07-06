@@ -79,9 +79,9 @@ gateway:
 
 ingester:
   replicas: ${replicas}
-%{ if storage_backend == "local" ~}
   config:
-    replication_factor: 1
+    replication_factor: ${replicas}
+%{ if storage_backend == "local" ~}
   persistence:
     enabled: true
     size: 10Gi
