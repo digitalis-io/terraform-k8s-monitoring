@@ -421,6 +421,7 @@ module "otel" {
 | `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually |
 | `log_parsing.json_enabled` | `true` | Parse JSON pod-log bodies (daemonset mode). When `false`, the `filelog` receiver uses only the `container` operator and bodies stay opaque |
 | `log_parsing.json_match_expr` | `body matches "^\\s*[{]"` | OTel `filelog` `if` guard — only bodies matching this expr are JSON-parsed, so plain-text logs pass through untouched. Override to match your log shape (e.g. `hasPrefix(body, "{")`) |
+| `log_parsing.strip_prefix` | `false` | Strip a leading text prefix from bodies emitted as `<timestamp> <LEVEL> {json}` (a console/text encoder in front of a JSON payload) so `json_parser` matches and `trace_id`/`span_id` are promoted to structured metadata. Only fires on lines that don't already start with `{` but contain one; pure-JSON and plain-text lines are untouched. Requires `json_enabled = true`. Prefer fixing the app to emit bare single-line JSON |
 | `log_parsing.severity_field` | `"level"` | JSON field mapped to `SeverityText`/`SeverityNumber`. Set `""` to disable severity mapping |
 | `log_parsing.trace_enabled` | `true` | Promote `trace_id`/`span_id` into the log record's trace context (fills ClickHouse `TraceId`/`SpanId`). Requires `json_enabled = true` |
 | `log_parsing.trace_id_field` | `"trace_id"` | JSON field holding the trace id (e.g. `traceID`, `traceId`, `dd.trace_id`) |

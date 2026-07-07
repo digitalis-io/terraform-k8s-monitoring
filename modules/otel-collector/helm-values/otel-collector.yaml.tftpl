@@ -81,6 +81,22 @@ config:
       operators:
         - type: container
 %{ if log_json_enabled ~}
+%{ if log_strip_prefix ~}
+        # Strip a leading text prefix (e.g. "2026-01-01 00:00:00 INFO {...}")
+        # so the JSON payload becomes the whole body and json_parser below can
+        # match it. Guarded to only fire on lines that do NOT already start
+        # with '{' but do contain one, leaving pure-JSON and plain-text lines
+        # untouched. Greedy capture with (?s) spans embedded newlines to the
+        # last closing brace.
+        - type: regex_parser
+          parse_from: body
+          regex: '(?s)(?P<_stripped_json>[{].*[}])'
+          if: 'not (body matches "^\\s*[{]") and body contains "{"'
+        - type: move
+          from: attributes._stripped_json
+          to: body
+          if: 'attributes["_stripped_json"] != nil'
+%{ endif ~}
         # Parse structured JSON log bodies so trace context and severity are
         # promoted to native OTel fields. Guarded so plain-text logs (which do
         # not match the expression below) pass through untouched.

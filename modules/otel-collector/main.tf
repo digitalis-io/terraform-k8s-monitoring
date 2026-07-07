@@ -65,6 +65,7 @@ resource "helm_release" "otel" {
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled
       log_json_match_expr = var.otel.log_parsing.json_match_expr
+      log_strip_prefix    = var.otel.log_parsing.strip_prefix
       log_severity_field  = var.otel.log_parsing.severity_field
       log_trace_enabled   = var.otel.log_parsing.trace_enabled
       log_trace_id_field  = var.otel.log_parsing.trace_id_field

@@ -35,6 +35,14 @@ variable "otel" {
       # you override it (e.g. use hasPrefix(body, "{") to avoid regex backslashes).
       json_match_expr = optional(string, "body matches \"^\\\\s*[{]\"")
 
+      # Strip a leading text prefix before the JSON body so lines emitted as
+      # "<timestamp> <LEVEL> {json}" (a console/text encoder in front of a JSON
+      # payload) still get parsed. Only fires on lines that do not already
+      # start with '{' but contain one; pure-JSON and plain-text lines are
+      # untouched. Prefer fixing the app to emit bare single-line JSON; enable
+      # this when you cannot change the emitting apps. Requires json_enabled.
+      strip_prefix = optional(bool, false)
+
       # JSON field mapped to SeverityText/SeverityNumber. Empty ("") disables
       # severity mapping.
       severity_field = optional(string, "level")
