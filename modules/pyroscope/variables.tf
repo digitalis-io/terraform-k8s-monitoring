@@ -29,6 +29,8 @@ variable "pyroscope" {
       s3_path_style = optional(bool, false) # set true for non-AWS S3 (Hetzner, MinIO, Ceph require this)
       s3_access_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
       s3_secret_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
+      # Object key prefix for all Pyroscope objects in S3; allows sharing one bucket with other components.
+      s3_key_prefix = optional(string, "")
       # Reference a pre-existing Kubernetes Secret containing S3 credentials.
       # When set, the module injects credentials as env vars rather than embedding them in Helm values.
       # Mutually exclusive with s3_access_key / s3_secret_key.
@@ -70,6 +72,11 @@ variable "pyroscope" {
       var.pyroscope.storage.s3_region == ""
     ))
     error_message = "When storage.backend is 's3', s3_bucket and s3_region are required."
+  }
+
+  validation {
+    condition     = !can(regex("^/|/$", var.pyroscope.storage.s3_key_prefix))
+    error_message = "storage.s3_key_prefix must not start or end with '/'."
   }
 
   validation {

@@ -106,7 +106,8 @@ resource "helm_release" "loki" {
       limits_memory   = var.loki.resources.limits_memory
 
       service_account_annotations = var.loki.service_account_annotations
-    })
+    }),
+    var.loki.extra_values
   ]
 
   depends_on = [kubernetes_namespace.loki, kubernetes_secret.loki_s3_credentials]

@@ -116,7 +116,8 @@ resource "helm_release" "mimir" {
       limits_memory   = var.mimir.resources.limits_memory
 
       service_account_annotations = var.mimir.service_account_annotations
-    })
+    }),
+    var.mimir.extra_values
   ]
 
   depends_on = [kubernetes_namespace.mimir, kubernetes_secret.mimir_s3_credentials]

@@ -77,6 +77,11 @@ variable "mimir" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/mimir" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "mimir@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Raw Helm values YAML, applied on top of this module's generated values
+    # (e.g. mimir.structuredConfig.limits, per-component resources/replicas).
+    # See the mimir-distributed chart's values.yaml for available keys.
+    extra_values = optional(string, "")
   })
   default = {}
 

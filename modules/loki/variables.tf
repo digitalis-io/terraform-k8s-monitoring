@@ -62,6 +62,11 @@ variable "loki" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/loki" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "loki@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Raw Helm values YAML, applied on top of this module's generated values
+    # (e.g. loki.limits_config, singleBinary/write/read resources or replicas).
+    # See the loki chart's values.yaml for available keys.
+    extra_values = optional(string, "")
   })
   default = {}
 

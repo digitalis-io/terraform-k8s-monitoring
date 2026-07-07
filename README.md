@@ -364,6 +364,7 @@ module "tempo" {
 | `retention` | `"720h"` | Trace retention period (30 days) |
 | `metrics_generator_remote_write_url` | `""` | Mimir (or Prometheus) remote_write URL to enable metrics-generator for TraceQL `rate()` and span metrics |
 | `storage.backend` | `"local"` | Storage backend: `local`, `s3`, `gcs`, or `azure` |
+| `storage.s3_key_prefix` | `""` | Object key prefix (example: `"tempo"`); optional, enables sharing one bucket with Mimir/Loki |
 | `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `service_account_annotations` | `{}` | Annotations for IRSA / Workload Identity |
 | `resources` | see below | CPU/memory requests and limits |
@@ -626,6 +627,7 @@ module "pyroscope" {
 | `storage.s3_insecure` | `false` | Use plain HTTP for the S3 endpoint |
 | `storage.s3_access_key` | `""` | S3 access key (leave empty for IRSA) |
 | `storage.s3_secret_key` | `""` | S3 secret key (leave empty for IRSA) |
+| `storage.s3_key_prefix` | `""` | Object key prefix (example: `"pyroscope"`); optional, enables sharing one bucket with other components |
 | `storage.s3_credentials_secret` | `null` | Reference a pre-existing Kubernetes Secret for S3 credentials (see [S3 credentials secret](#s3-credentials-secret)) |
 | `storage.gcs_bucket` | `""` | GCS bucket name |
 | `storage.gcs_service_account_key` | `""` | GCS service account JSON key (leave empty for Workload Identity) |
@@ -1489,6 +1491,42 @@ storage = {
   s3_alertmanager_prefix = "alertmanager"
 }
 ```
+
+### Sharing one S3 bucket across Mimir, Tempo, and Pyroscope
+
+Tempo and Pyroscope each expose a single `storage.s3_key_prefix` variable, so all three signal stores can share one bucket alongside Mimir:
+
+```hcl
+# mimir module
+storage = {
+  backend                = "s3"
+  s3_blocks_bucket       = "observability-shared"
+  s3_ruler_bucket        = "observability-shared"
+  s3_alertmanager_bucket = "observability-shared"
+  s3_region              = "eu-west-1"
+  s3_blocks_prefix       = "mimir-blocks"
+  s3_ruler_prefix        = "mimir-ruler"
+  s3_alertmanager_prefix = "mimir-alertmanager"
+}
+
+# tempo module
+storage = {
+  backend       = "s3"
+  s3_bucket     = "observability-shared"
+  s3_region     = "eu-west-1"
+  s3_key_prefix = "tempo"
+}
+
+# pyroscope module
+storage = {
+  backend       = "s3"
+  s3_bucket     = "observability-shared"
+  s3_region     = "eu-west-1"
+  s3_key_prefix = "pyroscope"
+}
+```
+
+> **Loki has no equivalent.** Loki's `storage_config` does not support an S3 object-key prefix upstream ([grafana/loki#5889](https://github.com/grafana/loki/issues/5889) is still open) — the `chunks`/`ruler` buckets it writes to must be dedicated to Loki, not shared with Mimir/Tempo/Pyroscope.
 
 ### S3 endpoint format
 

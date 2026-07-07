@@ -5,6 +5,9 @@ pyroscope:
   structuredConfig:
     storage:
       backend: ${storage_backend}
+%{ if storage_backend == "s3" && s3_key_prefix != "" ~}
+      prefix: ${s3_key_prefix}
+%{ endif ~}
 %{ if storage_backend == "s3" ~}
       s3:
         bucket_name: ${s3_bucket}
