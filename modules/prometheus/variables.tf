@@ -8,6 +8,21 @@ variable "prometheus" {
     create_namespace      = optional(bool, true)
     grafana_enabled       = optional(bool, true)
     alertmanager_enabled  = optional(bool, true)
+
+    # Number of Grafana replicas. Values > 1 require grafana_database (external
+    # PostgreSQL/MySQL) — the default SQLite backend cannot be shared across pods.
+    grafana_replicas = optional(number, 1)
+
+    # Per-component toggles. Disable any subset to slim the stack (e.g. set
+    # prometheus_enabled/prometheus_operator_enabled/kube_state_metrics_enabled/
+    # node_exporter_enabled/default_rules_enabled = false with grafana_enabled =
+    # true for a Grafana-only deployment). CRDs are always installed by the chart
+    # and are unaffected by these toggles.
+    prometheus_enabled          = optional(bool, true)
+    prometheus_operator_enabled = optional(bool, true)
+    kube_state_metrics_enabled  = optional(bool, true)
+    node_exporter_enabled       = optional(bool, true)
+    default_rules_enabled       = optional(bool, true)
     grafana_ingress = optional(object({
       enabled    = optional(bool, false)
       host       = optional(string, "")
@@ -40,6 +55,29 @@ variable "prometheus" {
     storage_size  = optional(string, "20Gi")
     storage_class = optional(string, "")
     retention     = optional(string, "24h")
+
+    # External database backend for Grafana. Leave null (default) to use the
+    # chart's built-in SQLite (ephemeral unless the pod has persistence). Set to
+    # move Grafana's state (dashboards, users, prefs) into PostgreSQL or MySQL —
+    # required for running more than one Grafana replica.
+    #
+    # Supply the password one of two ways:
+    #   * password        — plaintext; the module creates a Secret from it.
+    #   * password_secret — reference an existing Secret (never commit plaintext).
+    # Providing neither leaves GF_DATABASE_PASSWORD unset (passwordless / IAM auth).
+    grafana_database = optional(object({
+      type     = optional(string, "postgres") # "postgres" | "mysql"
+      host     = string                       # "host:port", e.g. "pg.db.svc:5432"
+      name     = string
+      user     = string
+      password = optional(string, "")
+      password_secret = optional(object({
+        name  = string
+        field = optional(string, "password")
+      }), null)
+      # PostgreSQL only: disable | require | verify-ca | verify-full. Ignored for mysql.
+      ssl_mode = optional(string, "")
+    }), null)
 
     # Mimir integration — leave empty to deploy standalone (no remote_write / Grafana datasource)
     mimir_remote_write_url = optional(string, "")
@@ -133,6 +171,59 @@ variable "prometheus" {
       !can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$", var.prometheus.prometheus_ingress.host))
     ))
     error_message = "prometheus_ingress.host must be a valid RFC 1123 hostname (e.g. prometheus.example.com) when prometheus_ingress.enabled is true."
+  }
+
+  validation {
+    condition     = var.prometheus.grafana_replicas >= 1
+    error_message = "grafana_replicas must be >= 1."
+  }
+
+  validation {
+    condition     = var.prometheus.grafana_replicas <= 1 || var.prometheus.grafana_database != null
+    error_message = "grafana_replicas > 1 requires grafana_database (external PostgreSQL/MySQL); SQLite cannot be shared across Grafana pods."
+  }
+
+  validation {
+    condition = (
+      var.prometheus.grafana_database == null ||
+      contains(["postgres", "mysql"], var.prometheus.grafana_database.type)
+    )
+    error_message = "grafana_database.type must be either \"postgres\" or \"mysql\"."
+  }
+
+  validation {
+    condition = (
+      var.prometheus.grafana_database == null ||
+      !(var.prometheus.grafana_database.password != "" && var.prometheus.grafana_database.password_secret != null)
+    )
+    error_message = "grafana_database: set at most one of password or password_secret, not both."
+  }
+
+  validation {
+    condition = (
+      var.prometheus.grafana_database == null ||
+      (var.prometheus.grafana_database.host != "" &&
+        var.prometheus.grafana_database.name != "" &&
+      var.prometheus.grafana_database.user != "")
+    )
+    error_message = "grafana_database requires non-empty host, name, and user."
+  }
+
+  validation {
+    condition = (
+      var.prometheus.grafana_database == null ||
+      can(regex("^[^:/\\s]+:[0-9]+$", var.prometheus.grafana_database.host))
+    )
+    error_message = "grafana_database.host must be in \"host:port\" form, e.g. \"pg.db.svc:5432\"."
+  }
+
+  validation {
+    condition = (
+      var.prometheus.grafana_database == null ||
+      var.prometheus.grafana_database.ssl_mode == "" ||
+      var.prometheus.grafana_database.type == "postgres"
+    )
+    error_message = "grafana_database.ssl_mode is only supported for type = \"postgres\"; leave it \"\" for mysql."
   }
 
   validation {

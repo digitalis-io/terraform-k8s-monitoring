@@ -1,3 +1,45 @@
+locals {
+  grafana_db = var.prometheus.grafana_database
+
+  # Create a Secret from a plaintext password only when one is given and the
+  # caller has not referenced an existing Secret.
+  grafana_db_create_secret = (
+    local.grafana_db != null &&
+    local.grafana_db.password_secret == null &&
+    local.grafana_db.password != ""
+  )
+
+  # Resolve where GF_DATABASE_PASSWORD is sourced from: an existing Secret, the
+  # one this module creates, or null (no password env — passwordless / IAM auth).
+  grafana_db_secret = (
+    local.grafana_db == null ? null :
+    local.grafana_db.password_secret != null ? local.grafana_db.password_secret :
+    local.grafana_db_create_secret ? { name = "prometheus-grafana-db", field = "password" } :
+    null
+  )
+}
+
+resource "kubernetes_secret" "grafana_database" {
+  count = local.grafana_db_create_secret ? 1 : 0
+
+  metadata {
+    name      = "prometheus-grafana-db"
+    namespace = var.prometheus.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    password = local.grafana_db.password
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.prometheus]
+}
+
 resource "kubernetes_namespace" "prometheus" {
   count = var.prometheus.create_namespace ? 1 : 0
 
@@ -34,6 +76,16 @@ resource "helm_release" "prometheus" {
       grafana_enabled      = var.prometheus.grafana_enabled
       alertmanager_enabled = var.prometheus.alertmanager_enabled
       namespace            = var.prometheus.namespace
+
+      prometheus_enabled          = var.prometheus.prometheus_enabled
+      prometheus_operator_enabled = var.prometheus.prometheus_operator_enabled
+      kube_state_metrics_enabled  = var.prometheus.kube_state_metrics_enabled
+      node_exporter_enabled       = var.prometheus.node_exporter_enabled
+      default_rules_enabled       = var.prometheus.default_rules_enabled
+
+      grafana_replicas  = var.prometheus.grafana_replicas
+      grafana_database  = local.grafana_db
+      grafana_db_secret = local.grafana_db_secret
 
       grafana_ingress_enabled     = var.prometheus.grafana_ingress.enabled
       grafana_ingress_host        = var.prometheus.grafana_ingress.host
@@ -74,7 +126,7 @@ resource "helm_release" "prometheus" {
     }))
   ]
 
-  depends_on = [kubernetes_namespace.prometheus]
+  depends_on = [kubernetes_namespace.prometheus, kubernetes_secret.grafana_database]
 }
 
 locals {
