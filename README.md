@@ -260,6 +260,13 @@ module "prometheus" {
 | `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `grafana_enabled` | `true` | Deploy Grafana |
 | `alertmanager_enabled` | `true` | Deploy Alertmanager |
+| `grafana_replicas` | `1` | Number of Grafana replicas. Values > 1 require `grafana_database` (SQLite cannot be shared across pods) |
+| `prometheus_enabled` | `true` | Deploy the Prometheus server. Set `false` (with the other component toggles) for a Grafana-only install |
+| `prometheus_operator_enabled` | `true` | Deploy the Prometheus Operator. CRDs are installed regardless of this toggle |
+| `kube_state_metrics_enabled` | `true` | Deploy kube-state-metrics |
+| `node_exporter_enabled` | `true` | Deploy Prometheus node-exporter |
+| `default_rules_enabled` | `true` | Create the bundled default alerting/recording `PrometheusRule` resources |
+| `grafana_database` | `null` | External DB backend for Grafana — moves state off the ephemeral SQLite (required for `grafana_replicas > 1`). Object; see the [Grafana external database](#grafana-external-database) table below. `null` keeps the chart's built-in SQLite |
 | `mimir_remote_write_url` | `""` | Mimir remote_write URL — use `module.mimir.remote_write_endpoint` |
 | `mimir_datasource_url` | `""` | Mimir query URL — use `module.mimir.query_frontend_endpoint` |
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header |
@@ -283,6 +290,34 @@ module "prometheus" {
 Default resources: 200m CPU / 512Mi memory request, 2 CPU / 2Gi memory limit.
 
 Default Grafana plugins: `digrich-bubblechart-panel`, `grafana-clock-panel`, `btplc-status-dot-panel`, `grafana-piechart-panel`, `grafana-llm-app`, `grafana-clickhouse-datasource`.
+
+#### Grafana external database
+
+Fields of the `grafana_database` object. Supply the password with **exactly one** of `password` or `password_secret` (or neither for passwordless/IAM auth); it is injected as `GF_DATABASE_PASSWORD` via a `secretKeyRef` and never rendered into the Helm values.
+
+| Field | Required | Default | Description |
+| --- | --- | --- | --- |
+| `type` | no | `"postgres"` | `"postgres"` or `"mysql"` |
+| `host` | yes | — | `"host:port"`, e.g. `"pg.db.svc:5432"` |
+| `name` | yes | — | Database name |
+| `user` | yes | — | Database user |
+| `password` | no | `""` | Plaintext password — the module creates a `prometheus-grafana-db` Secret. Mutually exclusive with `password_secret` |
+| `password_secret` | no | `null` | Reference an existing Secret: `{ name = "grafana-db", field = "password" }` (`field` defaults to `"password"`) |
+| `ssl_mode` | no | `""` | PostgreSQL only: `disable`/`require`/`verify-ca`/`verify-full`. Must be `""` for `mysql` |
+
+```hcl
+prometheus = {
+  grafana_replicas = 2
+  grafana_database = {
+    type            = "postgres"
+    host            = "pg.db.svc:5432"
+    name            = "grafana"
+    user            = "grafana"
+    ssl_mode        = "require"
+    password_secret = { name = "grafana-db", field = "password" }
+  }
+}
+```
 
 **Outputs:**
 

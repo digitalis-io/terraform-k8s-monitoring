@@ -1,4 +1,5 @@
 prometheus:
+  enabled: ${prometheus_enabled}
   prometheusSpec:
     retention: ${retention}
     enableRemoteWriteReceiver: true
@@ -57,6 +58,25 @@ grafana:
 %{ endif ~}
 
 %{ if grafana_enabled ~}
+  replicas: ${grafana_replicas}
+%{ if grafana_database != null ~}
+  grafana.ini:
+    database:
+      type: ${grafana_database.type}
+      host: ${grafana_database.host}
+      name: ${grafana_database.name}
+      user: ${grafana_database.user}
+%{ if grafana_database.type == "postgres" && grafana_database.ssl_mode != "" ~}
+      ssl_mode: ${grafana_database.ssl_mode}
+%{ endif ~}
+%{ if grafana_db_secret != null ~}
+  envValueFrom:
+    GF_DATABASE_PASSWORD:
+      secretKeyRef:
+        name: ${grafana_db_secret.name}
+        key: ${grafana_db_secret.field}
+%{ endif ~}
+%{ endif ~}
   sidecar:
     dashboards:
       enabled: true
@@ -225,6 +245,23 @@ grafana:
         hosts:
           - ${grafana_ingress_host}
 %{ endif ~}
+
+# Per-component toggles. CRDs are installed regardless of these settings.
+prometheusOperator:
+  enabled: ${prometheus_operator_enabled}
+
+kubeStateMetrics:
+  enabled: ${kube_state_metrics_enabled}
+kube-state-metrics:
+  enabled: ${kube_state_metrics_enabled}
+
+nodeExporter:
+  enabled: ${node_exporter_enabled}
+prometheus-node-exporter:
+  enabled: ${node_exporter_enabled}
+
+defaultRules:
+  create: ${default_rules_enabled}
 
 alertmanager:
   enabled: ${alertmanager_enabled}
