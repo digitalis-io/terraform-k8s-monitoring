@@ -146,6 +146,40 @@ jobs:
       - name: Compliance — sensitive-data disabled
         run: terraform-compliance -f tests/compliance/features -p /tmp/plan-sensitive-data-disabled.json
 
+      # ── prometheus module ────────────────────────────────────────────────
+      - name: Init prometheus module
+        run: tofu -chdir=modules/prometheus init -backend=false
+
+      - name: Plan — prometheus defaults fixture
+        run: |
+          tofu -chdir=modules/prometheus plan \
+            -var-file=../../tests/compliance/fixtures/prometheus_defaults.tfvars \
+            -out=plan-prom-defaults.binary
+          tofu -chdir=modules/prometheus show -json plan-prom-defaults.binary > /tmp/plan-prom-defaults.json
+
+      - name: Compliance — prometheus defaults
+        run: terraform-compliance -f tests/compliance/features/prometheus -p /tmp/plan-prom-defaults.json
+
+      - name: Plan — prometheus Grafana-only fixture
+        run: |
+          tofu -chdir=modules/prometheus plan \
+            -var-file=../../tests/compliance/fixtures/prometheus_grafana_only.tfvars \
+            -out=plan-prom-grafana-only.binary
+          tofu -chdir=modules/prometheus show -json plan-prom-grafana-only.binary > /tmp/plan-prom-grafana-only.json
+
+      - name: Compliance — prometheus Grafana-only
+        run: terraform-compliance -f tests/compliance/features/prometheus -p /tmp/plan-prom-grafana-only.json
+
+      - name: Plan — prometheus Grafana external DB (plaintext) fixture
+        run: |
+          tofu -chdir=modules/prometheus plan \
+            -var-file=../../tests/compliance/fixtures/prometheus_grafana_db_plaintext.tfvars \
+            -out=plan-prom-grafana-db.binary
+          tofu -chdir=modules/prometheus show -json plan-prom-grafana-db.binary > /tmp/plan-prom-grafana-db.json
+
+      - name: Compliance — prometheus Grafana external DB
+        run: terraform-compliance -f tests/compliance/features/prometheus -p /tmp/plan-prom-grafana-db.json
+
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
     name: terratest
