@@ -68,6 +68,17 @@ variable "otel" {
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "otel@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
 
+    # Pod scheduling. nodeSelector pins the collector to matching nodes;
+    # tolerations let it schedule onto tainted pools (e.g. GKE's automatic
+    # kubernetes.io/arch=arm64:NoSchedule taint on Arm node pools).
+    node_selector = optional(map(string), {})
+    tolerations = optional(list(object({
+      key      = optional(string, "")
+      operator = optional(string, "Equal")
+      value    = optional(string, "")
+      effect   = optional(string, "")
+    })), [])
+
     operator = optional(object({
       enabled                    = optional(bool, false)
       chart_version              = optional(string, "0.116.0")

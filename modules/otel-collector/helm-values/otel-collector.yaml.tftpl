@@ -246,3 +246,20 @@ serviceAccount:
     ${key}: "${value}"
 %{ endfor ~}
 %{ endif ~}
+%{ if length(node_selector) > 0 ~}
+nodeSelector:
+%{ for key, value in node_selector ~}
+  ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+%{ if length(tolerations) > 0 ~}
+tolerations:
+%{ for t in tolerations ~}
+  - key: "${t.key}"
+    operator: "${t.operator}"
+%{ if t.value != "" ~}
+    value: "${t.value}"
+%{ endif ~}
+    effect: "${t.effect}"
+%{ endfor ~}
+%{ endif ~}

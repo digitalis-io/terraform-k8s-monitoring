@@ -85,6 +85,10 @@ resource "helm_release" "otel" {
       limits_memory   = var.otel.resources.limits_memory
 
       service_account_annotations = var.otel.service_account_annotations
+
+      # Scheduling
+      node_selector = var.otel.node_selector
+      tolerations   = var.otel.tolerations
     }))
   ]
 

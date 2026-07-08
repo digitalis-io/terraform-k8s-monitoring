@@ -1,3 +1,19 @@
+locals {
+  # Drop empty `value` so Exists-style tolerations render cleanly.
+  cert_manager_tolerations = [
+    for t in var.cert_manager.tolerations : merge(
+      { key = t.key, operator = t.operator, effect = t.effect },
+      t.value != "" ? { value = t.value } : {},
+    )
+  ]
+
+  # Scheduling applied to every cert-manager component.
+  cert_manager_scheduling = {
+    nodeSelector = var.cert_manager.node_selector
+    tolerations  = local.cert_manager_tolerations
+  }
+}
+
 resource "kubernetes_namespace" "cert_manager" {
   count = var.cert_manager.create_namespace ? 1 : 0
 
@@ -24,10 +40,18 @@ resource "helm_release" "cert_manager" {
   wait_for_jobs    = true
   timeout          = 300
 
-  set {
-    name  = "crds.enabled"
-    value = "true"
-  }
+  values = [
+    yamlencode(merge(
+      {
+        crds            = { enabled = true }
+        nodeSelector    = local.cert_manager_scheduling.nodeSelector
+        tolerations     = local.cert_manager_scheduling.tolerations
+        webhook         = local.cert_manager_scheduling
+        cainjector      = local.cert_manager_scheduling
+        startupapicheck = local.cert_manager_scheduling
+      },
+    ))
+  ]
 
   depends_on = [kubernetes_namespace.cert_manager]
 }
