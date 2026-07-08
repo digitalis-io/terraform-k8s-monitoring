@@ -13,6 +13,15 @@ locals {
   logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
   metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics]" : "[otlp]"
+
+  # Tolerations with empty `value` dropped (Exists-style entries), for the
+  # operator Helm values (yamlencode).
+  operator_tolerations = [
+    for t in var.otel.tolerations : merge(
+      { key = t.key, operator = t.operator, effect = t.effect },
+      t.value != "" ? { value = t.value } : {},
+    )
+  ]
 }
 
 resource "kubernetes_namespace" "otel" {
@@ -113,6 +122,9 @@ resource "helm_release" "otel_operator" {
 
   values = [
     yamlencode({
+      # Schedule the operator manager onto tainted pools (e.g. arm64).
+      nodeSelector = var.otel.node_selector
+      tolerations  = local.operator_tolerations
       manager = {
         collectorImage = {
           repository = try(var.otel.operator.collector_image_repository, "otel/opentelemetry-collector-k8s")
