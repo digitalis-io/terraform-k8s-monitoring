@@ -7,9 +7,13 @@ locals {
     var.otel.loki_endpoint != "" ? "otlphttp/loki" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
+  _metrics_list = compact([
+    var.otel.mimir_endpoint != "" ? "prometheusremotewrite" : "",
+    var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
+  ])
 
   traces_exporters  = length(local._traces_list) > 0 ? "[${join(", ", local._traces_list)}]" : "[debug]"
-  metrics_exporters = var.otel.mimir_endpoint != "" ? "[prometheusremotewrite]" : "[debug]"
+  metrics_exporters = length(local._metrics_list) > 0 ? "[${join(", ", local._metrics_list)}]" : "[debug]"
   logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
   metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics]" : "[otlp]"
