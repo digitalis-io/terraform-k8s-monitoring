@@ -61,6 +61,8 @@ resource "helm_release" "otel" {
       clickhouse_password      = var.otel.clickhouse_password
       clickhouse_database      = var.otel.clickhouse_database
       clickhouse_create_schema = var.otel.clickhouse_create_schema
+      clickhouse_cluster       = var.otel.clickhouse_cluster
+      clickhouse_table_engine  = var.otel.clickhouse_table_engine
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled

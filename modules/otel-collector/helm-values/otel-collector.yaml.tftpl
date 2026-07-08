@@ -204,6 +204,13 @@ config:
       password: ${clickhouse_password}
 %{ endif ~}
       database: ${clickhouse_database}
+%{ if clickhouse_cluster != "" ~}
+      cluster_name: ${clickhouse_cluster}
+%{ endif ~}
+%{ if clickhouse_table_engine != "" ~}
+      table_engine:
+        name: ${clickhouse_table_engine}
+%{ endif ~}
       logs_table_name: otel_logs
       traces_table_name: otel_traces
       create_schema: ${clickhouse_create_schema}

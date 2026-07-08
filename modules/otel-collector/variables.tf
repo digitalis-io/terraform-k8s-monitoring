@@ -18,6 +18,8 @@ variable "otel" {
     clickhouse_password      = optional(string, "")          # ClickHouse password for OTLP/ClickHouse exporter
     clickhouse_database      = optional(string, "otel")      # ClickHouse database for OTLP/ClickHouse exporter
     clickhouse_create_schema = optional(bool, true)          # auto-create DB/tables on startup
+    clickhouse_cluster       = optional(string, "")          # cluster name -> ON CLUSTER DDL (creates tables on all nodes)
+    clickhouse_table_engine  = optional(string, "")          # e.g. ReplicatedMergeTree (pair with clickhouse_cluster for replication)
 
     # Structured-log parsing for the daemonset `filelog` receiver.
     # Promotes trace context and severity from JSON pod logs into native OTel
