@@ -7,6 +7,9 @@ variable "otel" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
     mode                  = optional(string, "daemonset") # daemonset | deployment
+    # Helm release name. Override when running two collectors in one namespace
+    # (e.g. a "deployment" gateway plus a "daemonset" log/host agent).
+    release_name = optional(string, "otel")
 
     # Wire from sibling module outputs
     tempo_endpoint           = optional(string, "")          # OTLP gRPC :4317 -- use module.tempo.otlp_grpc_endpoint

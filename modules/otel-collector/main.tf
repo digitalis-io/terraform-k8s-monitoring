@@ -41,7 +41,7 @@ resource "kubernetes_namespace" "otel" {
 }
 
 resource "helm_release" "otel" {
-  name       = "otel"
+  name       = var.otel.release_name
   repository = "https://open-telemetry.github.io/opentelemetry-helm-charts"
   chart      = "opentelemetry-collector"
   version    = var.otel.chart_version
