@@ -178,6 +178,8 @@ module "cert_manager" {
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
+| `node_selector` | `{}` | `nodeSelector` applied to all cert-manager components (controller, webhook, cainjector, startupapicheck) |
+| `tolerations` | `[]` | Tolerations applied to all cert-manager components, letting the pods schedule onto tainted pools (e.g. GKE's `kubernetes.io/arch=arm64:NoSchedule`). Object list: `key`, `operator` (default `"Equal"`), `value`, `effect`. For `Exists`-style tolerations set `operator = "Exists"` and leave `value` empty |
 | `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 
 No notable outputs.
@@ -445,6 +447,8 @@ module "otel" {
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
 | `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `mode` | `"daemonset"` | `daemonset` or `deployment` |
+| `node_selector` | `{}` | `nodeSelector` pinning the collector to matching nodes |
+| `tolerations` | `[]` | Tolerations letting the collector schedule onto tainted pools (e.g. GKE's `kubernetes.io/arch=arm64:NoSchedule`). Object list: `key`, `operator` (default `"Equal"`), `value`, `effect`. For `Exists`-style tolerations set `operator = "Exists"` and leave `value` empty |
 | `tempo_endpoint` | `""` | OTLP gRPC endpoint for Tempo — use `module.tempo.otlp_grpc_endpoint` |
 | `mimir_endpoint` | `""` | Remote write URL for Mimir — use `module.mimir.remote_write_endpoint` |
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header sent to Mimir — use `module.mimir.tenant_id` |
