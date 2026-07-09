@@ -16,7 +16,11 @@ locals {
   metrics_exporters = length(local._metrics_list) > 0 ? "[${join(", ", local._metrics_list)}]" : "[debug]"
   logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
-  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics]" : "[otlp]"
+  # daemonset: node OS metrics (hostmetrics) + per-node kubelet pod/container
+  # metrics (kubeletstats). deployment: cluster-singleton object-state metrics
+  # (k8s_cluster) — one watcher for the whole API, so it belongs on the single
+  # deployment replica, never the per-node daemonset (would duplicate).
+  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[otlp, k8s_cluster]"
 
   # Tolerations with empty `value` dropped (Exists-style entries), for the
   # operator Helm values (yamlencode).

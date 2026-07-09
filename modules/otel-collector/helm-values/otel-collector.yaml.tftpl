@@ -35,6 +35,32 @@ clusterRole:
     - apiGroups: ["extensions"]
       resources: ["replicasets"]
       verbs: ["get", "watch", "list"]
+%{ if mode == "daemonset" ~}
+    # kubeletstats scrapes the local kubelet :10250 summary API for node/pod/
+    # container/volume metrics.
+    - apiGroups: [""]
+      resources: ["nodes/stats", "nodes/proxy"]
+      verbs: ["get", "list", "watch"]
+%{ endif ~}
+%{ if mode == "deployment" ~}
+    # k8s_cluster watches the API server for object-state metrics (pod phase,
+    # node conditions, deployment/replica counts, resource quotas, ...).
+    - apiGroups: [""]
+      resources: ["events", "namespaces", "namespaces/status", "nodes", "nodes/spec", "pods", "pods/status", "replicationcontrollers", "replicationcontrollers/status", "resourcequotas", "services"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["apps"]
+      resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["extensions"]
+      resources: ["daemonsets", "deployments"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["autoscaling"]
+      resources: ["horizontalpodautoscalers"]
+      verbs: ["get", "list", "watch"]
+%{ endif ~}
 
 extraEnvs:
   - name: KUBE_NODE_NAME
@@ -128,6 +154,23 @@ config:
           mute_process_io_error: true
           mute_process_user_error: true
         processes: {}
+    # Per-node kubelet metrics: pod/container CPU, memory, network, filesystem,
+    # and volume usage. Talks to the local kubelet over the node's own name
+    # (KUBE_NODE_NAME) on the read-only-authenticated port 10250.
+    kubeletstats:
+      collection_interval: 20s
+      auth_type: serviceAccount
+      endpoint: "$${env:KUBE_NODE_NAME}:10250"
+      insecure_skip_verify: true
+      metric_groups: [node, pod, container, volume]
+%{ endif ~}
+%{ if mode == "deployment" ~}
+    # Cluster-level object-state metrics from the API server (single watcher).
+    k8s_cluster:
+      auth_type: serviceAccount
+      collection_interval: 30s
+      node_conditions_to_report: [Ready, MemoryPressure, DiskPressure, PIDPressure, NetworkUnavailable]
+      allocatable_types_to_report: [cpu, memory, ephemeral-storage, storage]
 %{ endif ~}
 
   processors:
