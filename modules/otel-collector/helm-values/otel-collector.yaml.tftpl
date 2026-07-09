@@ -239,6 +239,24 @@ config:
       tls:
         insecure: true
 %{ endif ~}
+%{ if otlphttp_logs_endpoint != "" ~}
+    # Generic OTLP/HTTP logs exporter: for backends without Loki's /otlp
+    # convention (the exporter appends /v1/logs itself), e.g. gigapipe's
+    # native /v1/logs route.
+    otlphttp/logs:
+      endpoint: ${otlphttp_logs_endpoint}
+      tls:
+        insecure: true
+%{ endif ~}
+%{ if otlphttp_traces_endpoint != "" ~}
+    # Generic OTLP/HTTP traces exporter: for backends without a gRPC OTLP
+    # receiver (the exporter appends /v1/traces itself), e.g. gigapipe's
+    # native /v1/traces route.
+    otlphttp/traces:
+      endpoint: ${otlphttp_traces_endpoint}
+      tls:
+        insecure: true
+%{ endif ~}
 %{ if clickhouse_endpoint != "" ~}
     clickhouse:
       endpoint: ${clickhouse_endpoint}

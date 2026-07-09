@@ -1,10 +1,12 @@
 locals {
   _traces_list = compact([
     var.otel.tempo_endpoint != "" ? "otlp/tempo" : "",
+    var.otel.otlphttp_traces_endpoint != "" ? "otlphttp/traces" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
   _logs_list = compact([
     var.otel.loki_endpoint != "" ? "otlphttp/loki" : "",
+    var.otel.otlphttp_logs_endpoint != "" ? "otlphttp/logs" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
   _metrics_list = compact([
@@ -74,6 +76,8 @@ resource "helm_release" "otel" {
       mimir_endpoint           = var.otel.mimir_endpoint
       mimir_tenant_id          = var.otel.mimir_tenant_id
       loki_endpoint            = var.otel.loki_endpoint
+      otlphttp_logs_endpoint   = var.otel.otlphttp_logs_endpoint
+      otlphttp_traces_endpoint = var.otel.otlphttp_traces_endpoint
       clickhouse_username      = var.otel.clickhouse_username
       clickhouse_password      = var.otel.clickhouse_password
       clickhouse_database      = var.otel.clickhouse_database
