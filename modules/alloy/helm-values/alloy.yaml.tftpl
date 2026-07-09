@@ -214,9 +214,9 @@ alloy:
           target_label  = "container"
         }
         rule {
-          # pyroscope.ebpf correlates via the host's cgroup filesystem, which
-          # keys on the raw container ID -- strip the "containerd://" (or
-          # "docker://", "cri-o://") scheme prefix Kubernetes reports.
+          // pyroscope.ebpf correlates via the host's cgroup filesystem, which
+          // keys on the raw container ID -- strip the "containerd://" (or
+          // "docker://", "cri-o://") scheme prefix Kubernetes reports.
           source_labels = ["__meta_kubernetes_pod_container_id"]
           regex         = "^(?:[a-zA-Z0-9_]+://)?(.+)$"
           target_label  = "__container_id__"
