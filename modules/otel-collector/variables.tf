@@ -16,19 +16,28 @@ variable "otel" {
     mimir_endpoint  = optional(string, "")          # remote_write URL -- use module.mimir.remote_write_endpoint
     mimir_tenant_id = optional(string, "anonymous") # X-Scope-OrgID header -- wire from module.mimir.tenant_id
     loki_endpoint   = optional(string, "")          # Loki push :3100 -- use module.loki.datasource_url
+    # Static scrape targets for an additional `prometheus` receiver
+    # (mode = "deployment" only) -- e.g. a kube-state-metrics Service
+    # ("kube-state-metrics.monitoring.svc:8080"). Empty list omits the
+    # receiver entirely.
+    prometheus_scrape_targets = optional(list(string), [])
     # Generic OTLP/HTTP exporters for backends that speak plain OTLP/HTTP but
     # don't match the Loki (`<endpoint>/otlp`) or Tempo (gRPC :4317) conventions
     # above -- e.g. gigapipe's native /v1/logs and /v1/traces routes. Each is a
     # base URL; the otlphttp exporter appends /v1/logs or /v1/traces itself.
     otlphttp_logs_endpoint   = optional(string, "")
     otlphttp_traces_endpoint = optional(string, "")
-    clickhouse_endpoint      = optional(string, "")     # ClickHouse HTTP :8123 -- use module.clickhouse.http_endpoint
-    clickhouse_username      = optional(string, "")     # ClickHouse username for OTLP/ClickHouse exporter
-    clickhouse_password      = optional(string, "")     # ClickHouse password for OTLP/ClickHouse exporter
-    clickhouse_database      = optional(string, "otel") # ClickHouse database for OTLP/ClickHouse exporter
-    clickhouse_create_schema = optional(bool, true)     # auto-create DB/tables on startup
-    clickhouse_cluster       = optional(string, "")     # cluster name -> ON CLUSTER DDL (creates tables on all nodes)
-    clickhouse_table_engine  = optional(string, "")     # e.g. ReplicatedMergeTree (pair with clickhouse_cluster for replication)
+    # Uniform collection_interval override for the metrics receivers below
+    # (hostmetrics, kubeletstats, k8s_cluster) -- each otherwise defaults to a
+    # different interval (10s/20s/30s). Empty keeps those per-receiver defaults.
+    metrics_collection_interval = optional(string, "")
+    clickhouse_endpoint         = optional(string, "")     # ClickHouse HTTP :8123 -- use module.clickhouse.http_endpoint
+    clickhouse_username         = optional(string, "")     # ClickHouse username for OTLP/ClickHouse exporter
+    clickhouse_password         = optional(string, "")     # ClickHouse password for OTLP/ClickHouse exporter
+    clickhouse_database         = optional(string, "otel") # ClickHouse database for OTLP/ClickHouse exporter
+    clickhouse_create_schema    = optional(bool, true)     # auto-create DB/tables on startup
+    clickhouse_cluster          = optional(string, "")     # cluster name -> ON CLUSTER DDL (creates tables on all nodes)
+    clickhouse_table_engine     = optional(string, "")     # e.g. ReplicatedMergeTree (pair with clickhouse_cluster for replication)
 
     # Structured-log parsing for the daemonset `filelog` receiver.
     # Promotes trace context and severity from JSON pod logs into native OTel

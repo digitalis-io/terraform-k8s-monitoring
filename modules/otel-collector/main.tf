@@ -21,8 +21,15 @@ locals {
   # daemonset: node OS metrics (hostmetrics) + per-node kubelet pod/container
   # metrics (kubeletstats). deployment: cluster-singleton object-state metrics
   # (k8s_cluster) — one watcher for the whole API, so it belongs on the single
-  # deployment replica, never the per-node daemonset (would duplicate).
-  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[otlp, k8s_cluster]"
+  # deployment replica, never the per-node daemonset (would duplicate). The
+  # `prometheus` receiver (scraping e.g. kube-state-metrics) is opt-in via
+  # prometheus_scrape_targets, deployment mode only (a single scraper, like
+  # k8s_cluster, not one per node).
+  _metrics_receivers_deployment = concat(
+    ["otlp", "k8s_cluster"],
+    length(var.otel.prometheus_scrape_targets) > 0 ? ["prometheus"] : [],
+  )
+  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[${join(", ", local._metrics_receivers_deployment)}]"
 
   # Tolerations with empty `value` dropped (Exists-style entries), for the
   # operator Helm values (yamlencode).
@@ -72,18 +79,20 @@ resource "helm_release" "otel" {
       image_pull_policy = var.otel.image.pull_policy
 
       # Exporter endpoints
-      tempo_endpoint           = var.otel.tempo_endpoint
-      mimir_endpoint           = var.otel.mimir_endpoint
-      mimir_tenant_id          = var.otel.mimir_tenant_id
-      loki_endpoint            = var.otel.loki_endpoint
-      otlphttp_logs_endpoint   = var.otel.otlphttp_logs_endpoint
-      otlphttp_traces_endpoint = var.otel.otlphttp_traces_endpoint
-      clickhouse_username      = var.otel.clickhouse_username
-      clickhouse_password      = var.otel.clickhouse_password
-      clickhouse_database      = var.otel.clickhouse_database
-      clickhouse_create_schema = var.otel.clickhouse_create_schema
-      clickhouse_cluster       = var.otel.clickhouse_cluster
-      clickhouse_table_engine  = var.otel.clickhouse_table_engine
+      tempo_endpoint              = var.otel.tempo_endpoint
+      mimir_endpoint              = var.otel.mimir_endpoint
+      mimir_tenant_id             = var.otel.mimir_tenant_id
+      loki_endpoint               = var.otel.loki_endpoint
+      otlphttp_logs_endpoint      = var.otel.otlphttp_logs_endpoint
+      otlphttp_traces_endpoint    = var.otel.otlphttp_traces_endpoint
+      metrics_collection_interval = var.otel.metrics_collection_interval
+      prometheus_scrape_targets   = var.otel.prometheus_scrape_targets
+      clickhouse_username         = var.otel.clickhouse_username
+      clickhouse_password         = var.otel.clickhouse_password
+      clickhouse_database         = var.otel.clickhouse_database
+      clickhouse_create_schema    = var.otel.clickhouse_create_schema
+      clickhouse_cluster          = var.otel.clickhouse_cluster
+      clickhouse_table_engine     = var.otel.clickhouse_table_engine
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled

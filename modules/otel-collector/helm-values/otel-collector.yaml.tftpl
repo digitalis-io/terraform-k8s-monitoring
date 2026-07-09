@@ -133,7 +133,7 @@ config:
 %{ endif ~}
     hostmetrics:
       root_path: /hostfs
-      collection_interval: 10s
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "10s"}
       scrapers:
         cpu: {}
         load: {}
@@ -158,7 +158,7 @@ config:
     # and volume usage. Talks to the local kubelet over the node's own name
     # (KUBE_NODE_NAME) on the read-only-authenticated port 10250.
     kubeletstats:
-      collection_interval: 20s
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "20s"}
       auth_type: serviceAccount
       endpoint: "$${env:KUBE_NODE_NAME}:10250"
       insecure_skip_verify: true
@@ -168,9 +168,21 @@ config:
     # Cluster-level object-state metrics from the API server (single watcher).
     k8s_cluster:
       auth_type: serviceAccount
-      collection_interval: 30s
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "30s"}
       node_conditions_to_report: [Ready, MemoryPressure, DiskPressure, PIDPressure, NetworkUnavailable]
       allocatable_types_to_report: [cpu, memory, ephemeral-storage, storage]
+%{ if length(prometheus_scrape_targets) > 0 ~}
+    # Scrapes static Prometheus exposition-format targets (e.g.
+    # kube-state-metrics), so kube-prometheus-stack-style dashboards that
+    # expect kube_state_metrics metric names render against real data.
+    prometheus:
+      config:
+        scrape_configs:
+          - job_name: kube-state-metrics
+            scrape_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "30s"}
+            static_configs:
+              - targets: ${jsonencode(prometheus_scrape_targets)}
+%{ endif ~}
 %{ endif ~}
 
   processors:
