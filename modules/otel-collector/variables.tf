@@ -33,6 +33,11 @@ variable "otel" {
     # gzip/zstd typically shrink telemetry ~5-10x. "none" disables it.
     # prometheusremotewrite is always snappy-compressed (spec) and unaffected.
     otlp_compression = optional(string, "gzip")
+    # Stamp service.namespace on telemetry that lacks it (host/node metrics from
+    # the hostmetrics/kubeletstats receivers) via a resource processor with
+    # action=insert, so OTel dashboards that filter on service.namespace (e.g.
+    # Grafana 20376) resolve. Empty disables the processor.
+    service_namespace = optional(string, "")
     # Uniform collection_interval override for the metrics receivers below
     # (hostmetrics, kubeletstats, k8s_cluster) -- each otherwise defaults to a
     # different interval (10s/20s/30s). Empty keeps those per-receiver defaults.
