@@ -2,6 +2,16 @@ mode: ${mode}
 
 service:
   enabled: true
+%{ if mode == "daemonset" ~}
+  # Node-local routing for the per-node agent: in-cluster OTLP producers that
+  # target this DaemonSet's ClusterIP Service are served by the agent pod on
+  # their OWN node, eliminating the cross-node (and, on a zone-spread cluster,
+  # cross-zone) hop and its inter-zone egress cost. Safe ONLY because a
+  # DaemonSet runs a pod on every node: internalTrafficPolicy Local drops
+  # traffic when the client's node has no local endpoint, so it must never be
+  # set on the deployment gateway Service (most nodes have no gateway pod).
+  internalTrafficPolicy: Local
+%{ endif ~}
 
 ports:
   otlp:
