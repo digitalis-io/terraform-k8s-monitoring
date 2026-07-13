@@ -246,6 +246,9 @@ config:
 %{ if tempo_endpoint != "" ~}
     otlp/tempo:
       endpoint: ${tempo_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}
@@ -258,6 +261,9 @@ config:
 %{ if loki_endpoint != "" ~}
     otlphttp/loki:
       endpoint: ${loki_endpoint}/otlp
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}
@@ -267,6 +273,9 @@ config:
     # native /v1/logs route.
     otlphttp/logs:
       endpoint: ${otlphttp_logs_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}
@@ -276,6 +285,9 @@ config:
     # native /v1/traces route.
     otlphttp/traces:
       endpoint: ${otlphttp_traces_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}

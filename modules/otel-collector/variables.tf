@@ -27,6 +27,12 @@ variable "otel" {
     # base URL; the otlphttp exporter appends /v1/logs or /v1/traces itself.
     otlphttp_logs_endpoint   = optional(string, "")
     otlphttp_traces_endpoint = optional(string, "")
+    # Wire-compression for the OTLP exporters (otlp/tempo, otlphttp/loki,
+    # otlphttp/logs, otlphttp/traces). OTLP defaults to no compression, so on a
+    # zone-spread cluster every export leg pays inter-zone egress on raw bytes;
+    # gzip/zstd typically shrink telemetry ~5-10x. "none" disables it.
+    # prometheusremotewrite is always snappy-compressed (spec) and unaffected.
+    otlp_compression = optional(string, "gzip")
     # Uniform collection_interval override for the metrics receivers below
     # (hostmetrics, kubeletstats, k8s_cluster) -- each otherwise defaults to a
     # different interval (10s/20s/30s). Empty keeps those per-receiver defaults.

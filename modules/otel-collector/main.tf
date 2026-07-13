@@ -85,6 +85,7 @@ resource "helm_release" "otel" {
       loki_endpoint               = var.otel.loki_endpoint
       otlphttp_logs_endpoint      = var.otel.otlphttp_logs_endpoint
       otlphttp_traces_endpoint    = var.otel.otlphttp_traces_endpoint
+      otlp_compression            = var.otel.otlp_compression
       metrics_collection_interval = var.otel.metrics_collection_interval
       prometheus_scrape_targets   = var.otel.prometheus_scrape_targets
       clickhouse_username         = var.otel.clickhouse_username
