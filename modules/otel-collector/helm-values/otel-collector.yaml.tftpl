@@ -270,6 +270,14 @@ config:
       endpoint: ${mimir_endpoint}
       headers:
         X-Scope-OrgID: "${mimir_tenant_id}"
+      # Promote OTel resource attributes (service.namespace, host.name, gcp
+      # detection attrs, ...) to per-series Prometheus labels. Without this the
+      # exporter keeps them in target_info only, so host/node metrics carry no
+      # service_namespace/host label and OTel dashboards (Grafana 20376
+      # HostMetrics) template vars (var-service_namespace, var-host) resolve to
+      # nothing. Raises cardinality -- acceptable for the PoC.
+      resource_to_telemetry_conversion:
+        enabled: true
 %{ endif ~}
 %{ if loki_endpoint != "" ~}
     otlphttp/loki:
