@@ -7,6 +7,10 @@ variable "otel" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
     mode                  = optional(string, "daemonset") # daemonset | deployment
+    # Deployment/StatefulSet replica count. Ignored in daemonset mode (one pod
+    # per node). Raise for a deployment gateway that must absorb a high OTLP
+    # ingest rate -- a single replica is a throughput bottleneck.
+    replicas = optional(number, 1)
     # Helm release name. Override when running two collectors in one namespace
     # (e.g. a "deployment" gateway plus a "daemonset" log/host agent).
     release_name = optional(string, "otel")

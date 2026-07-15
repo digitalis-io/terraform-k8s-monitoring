@@ -1,4 +1,9 @@
 mode: ${mode}
+%{ if mode != "daemonset" ~}
+# Deployment/StatefulSet gateway replica count (daemonset ignores this -- one
+# pod per node). Scaled up so a single gateway pod isn't the OTLP ingest ceiling.
+replicaCount: ${replicas}
+%{ endif ~}
 
 service:
   enabled: true
@@ -220,6 +225,20 @@ config:
           value: "${service_namespace}"
           action: insert
 %{ endif ~}
+%{ if mode == "daemonset" ~}
+    # Stamp host.name from the node the agent runs on. hostmetrics/kubeletstats
+    # emit no host identity of their own, so without this (a) every agent's
+    # series share one label set and collide in Mimir (duplicate/out-of-order
+    # samples), and (b) OTel HostMetrics dashboards (Grafana 20376) that template
+    # on host_name have no per-node values. $${env:...} escapes the Terraform
+    # templatefile pass so the collector expands KUBE_NODE_NAME at runtime;
+    # resource_to_telemetry_conversion then promotes host.name -> host_name label.
+    resource/hostname:
+      attributes:
+        - key: host.name
+          value: "$${env:KUBE_NODE_NAME}"
+          action: upsert
+%{ endif ~}
 %{ if gigapipe_label_keep != "" ~}
     # gigapipe/qryn promotes EVERY OTLP resource attribute to an indexed label
     # (its time_series/fingerprint model has no structured-metadata tier like
@@ -288,6 +307,12 @@ config:
       endpoint: ${mimir_endpoint}
       headers:
         X-Scope-OrgID: "${mimir_tenant_id}"
+      # Emit OTel metric names verbatim (system.cpu.time -> system_cpu_time), not
+      # system_cpu_time_seconds_total. OTel-native dashboards (Grafana 20376 OTel
+      # HostMetrics) query the un-suffixed names; the Prom-style unit/_total
+      # suffixes (default true) leave their variable/panel queries matching zero
+      # series. Applies to every metric on this exporter, not just hostmetrics.
+      add_metric_suffixes: false
       resource_to_telemetry_conversion:
         enabled: true
 %{ endif ~}
@@ -296,6 +321,9 @@ config:
       endpoint: ${mimir2_endpoint}
       headers:
         X-Scope-OrgID: "${mimir2_tenant_id}"
+      # See prometheusremotewrite above: keep OTel-native metric names so the
+      # OTel HostMetrics dashboards (Grafana 20376) resolve their queries.
+      add_metric_suffixes: false
       resource_to_telemetry_conversion:
         enabled: true
 %{ endif ~}
@@ -366,7 +394,7 @@ config:
         exporters: ${traces_exporters}
       metrics:
         receivers: ${metrics_receivers}
-        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}batch]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}%{ if mode == "daemonset" ~}resource/hostname, %{ endif ~}batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: ${logs_receivers}

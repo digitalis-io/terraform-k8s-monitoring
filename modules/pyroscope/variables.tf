@@ -58,6 +58,11 @@ variable "pyroscope" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/pyroscope" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "pyroscope@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Raw YAML deep-merged (Helm -f order) on top of the module's generated
+    # values -- for chart knobs this module does not expose (nodeSelector,
+    # tolerations, affinity, etc.). "" disables. Same pattern as the tempo module.
+    extra_values = optional(string, "")
   })
   default = {}
 
