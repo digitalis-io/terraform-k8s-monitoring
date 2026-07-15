@@ -88,6 +88,11 @@ loki:
 singleBinary:
   replicas: ${replicas}
 %{ if use_s3_secret ~}
+  # Loki only substitutes $${VAR} in its config when started with
+  # -config.expand-env=true; without it the accessKeyId/secretAccessKey above
+  # stay literal "$${AWS_ACCESS_KEY_ID}" strings and S3 auth fails silently.
+  extraArgs:
+    - "-config.expand-env=true"
   extraEnv:
     - name: AWS_ACCESS_KEY_ID
       valueFrom:
@@ -126,6 +131,8 @@ singleBinary:
 read:
   replicas: ${replicas}
 %{ if use_s3_secret ~}
+  extraArgs:
+    - "-config.expand-env=true"
   extraEnv:
     - name: AWS_ACCESS_KEY_ID
       valueFrom:
@@ -148,6 +155,8 @@ read:
 write:
   replicas: ${replicas}
 %{ if use_s3_secret ~}
+  extraArgs:
+    - "-config.expand-env=true"
   extraEnv:
     - name: AWS_ACCESS_KEY_ID
       valueFrom:
@@ -170,6 +179,8 @@ write:
 backend:
   replicas: ${replicas}
 %{ if use_s3_secret ~}
+  extraArgs:
+    - "-config.expand-env=true"
   extraEnv:
     - name: AWS_ACCESS_KEY_ID
       valueFrom:

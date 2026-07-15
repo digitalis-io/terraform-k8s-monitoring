@@ -2,6 +2,8 @@ package test
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -102,15 +104,61 @@ func TestMimirS3Validate(t *testing.T) {
 		Vars: map[string]interface{}{
 			"mimir": map[string]interface{}{
 				"storage": map[string]interface{}{
-					"backend":               "s3",
-					"s3_blocks_bucket":      "my-mimir-blocks",
-					"s3_ruler_bucket":       "my-mimir-ruler",
+					"backend":                "s3",
+					"s3_blocks_bucket":       "my-mimir-blocks",
+					"s3_ruler_bucket":        "my-mimir-ruler",
 					"s3_alertmanager_bucket": "my-mimir-alertmanager",
-					"s3_region":             "us-east-1",
+					"s3_region":              "us-east-1",
 				},
 			},
 		},
 	}
 
 	terraform.InitAndValidate(t, opts)
+}
+
+// mimirNamespaceCount plans modules/mimir with the given create_namespace value
+// and returns how many kubernetes_namespace resources the plan would create.
+// Planning the module directly needs no cluster.
+func mimirNamespaceCount(t *testing.T, createNamespace bool) int {
+	t.Helper()
+
+	opts := &terraform.Options{
+		TerraformDir:    "../modules/mimir",
+		TerraformBinary: "tofu",
+		NoColor:         true,
+		PlanFilePath:    filepath.Join(t.TempDir(), "mimir.plan"),
+		Vars: map[string]interface{}{
+			"mimir": map[string]interface{}{
+				"create_namespace": createNamespace,
+			},
+		},
+	}
+
+	plan := terraform.InitAndPlanAndShowWithStruct(t, opts)
+	count := 0
+	for addr := range plan.ResourcePlannedValuesMap {
+		if strings.HasPrefix(addr, "kubernetes_namespace.") {
+			count++
+		}
+	}
+	return count
+}
+
+// TestMimirCreatesNamespaceByDefault verifies the module creates its namespace
+// when create_namespace is true (the default).
+func TestMimirCreatesNamespaceByDefault(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, 1, mimirNamespaceCount(t, true),
+		"create_namespace = true must create exactly one namespace")
+}
+
+// TestMimirSkipsNamespaceWhenDisabled verifies that create_namespace = false
+// produces zero namespace resources (bring-your-own-namespace). Regression guard
+// for the previous behaviour where Mimir always created the namespace and apply
+// failed if it already existed (#24).
+func TestMimirSkipsNamespaceWhenDisabled(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, 0, mimirNamespaceCount(t, false),
+		"create_namespace = false must create no namespace resources")
 }
