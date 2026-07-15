@@ -88,7 +88,7 @@ alloy:
           context = "log"
           statements = [
 %{ for statement in sensitive_data_statements ~}
-            "${statement}",
+            "${replace(statement, "\"", "\\\"")}",
 %{ endfor ~}
           ]
         }
@@ -97,7 +97,7 @@ alloy:
           context = "span"
           statements = [
 %{ for statement in sensitive_data_statements ~}
-            "${statement}",
+            "${replace(statement, "\"", "\\\"")}",
 %{ endfor ~}
           ]
         }
@@ -106,7 +106,7 @@ alloy:
           context = "datapoint"
           statements = [
 %{ for statement in sensitive_data_statements ~}
-            "${statement}",
+            "${replace(statement, "\"", "\\\"")}",
 %{ endfor ~}
           ]
         }
@@ -184,16 +184,71 @@ alloy:
         }
       }
 
+%{ if ebpf_profiling_enabled ~}
+      // Continuous eBPF profiling: discovers pods annotated
+      // `profiles.grafana.com/cpu.scrape: "true"` and profiles them directly
+      // (no per-pod scrape port -- eBPF reads process memory/stacks via the
+      // kernel, not an HTTP endpoint).
+      discovery.kubernetes "profiling_pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "profiling_pods" {
+        targets = discovery.kubernetes.profiling_pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_profiles_grafana_com_cpu_scrape"]
+          action        = "keep"
+          regex         = "true"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          // pyroscope.ebpf correlates via the host's cgroup filesystem, which
+          // keys on the raw container ID -- strip the "containerd://" (or
+          // "docker://", "cri-o://") scheme prefix Kubernetes reports.
+          source_labels = ["__meta_kubernetes_pod_container_id"]
+          regex         = "^(?:[a-zA-Z0-9_]+://)?(.+)$"
+          target_label  = "__container_id__"
+        }
+        rule {
+          action = "labelmap"
+          regex  = "__meta_kubernetes_pod_label_(.+)"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+          separator     = "/"
+          target_label  = "service_name"
+        }
+      }
+
+      pyroscope.ebpf "instance" {
+        targets          = discovery.relabel.profiling_pods.output
+        forward_to       = [pyroscope.write.default.receiver]
+        collect_interval = "${ebpf_collect_interval}"
+        demangle         = "${ebpf_demangle}"
+      }
+
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 %{ endif ~}
   extraArgs:
     - --stability.level=experimental
 
-  controller:
-    type: ${controller_type}
-%{ if controller_type != "daemonset" ~}
-    replicas: ${replicas}
+%{ if ebpf_profiling_enabled ~}
+  securityContext:
+    privileged: true
 %{ endif ~}
 
 %{ if persistence_enabled && controller_type == "statefulset" ~}
@@ -268,4 +323,32 @@ ingress:
         - ${ingress_host}
       secretName: ${ingress_tls_secret}
 %{ endif ~}
+%{ endif ~}
+
+controller:
+  type: ${controller_type}
+%{ if controller_type != "daemonset" ~}
+  replicas: ${replicas}
+%{ endif ~}
+%{ if ebpf_profiling_enabled ~}
+  # eBPF profiling needs kernel access (bpf/perfmon/sys_admin) and to see
+  # every container's PID namespace from the node -- hostPID + privileged.
+  hostPID: true
+%{ endif ~}
+%{ if length(node_selector) > 0 ~}
+  nodeSelector:
+%{ for key, value in node_selector ~}
+    ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+%{ if length(tolerations) > 0 ~}
+  tolerations:
+%{ for t in tolerations ~}
+    - key: "${t.key}"
+      operator: "${t.operator}"
+%{ if lookup(t, "value", "") != "" ~}
+      value: "${t.value}"
+%{ endif ~}
+      effect: "${t.effect}"
+%{ endfor ~}
 %{ endif ~}

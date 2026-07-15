@@ -66,6 +66,12 @@ variable "tempo" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/tempo" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "tempo@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Raw Helm values YAML, applied on top of this module's generated values
+    # (e.g. nodeSelector/tolerations per component -- the chart has no single
+    # global knob for either). See the tempo-distributed chart's values.yaml
+    # for available keys.
+    extra_values = optional(string, "")
   })
   default = {}
 

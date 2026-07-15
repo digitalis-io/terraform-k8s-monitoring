@@ -178,6 +178,8 @@ module "cert_manager" {
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
+| `node_selector` | `{}` | `nodeSelector` applied to all cert-manager components (controller, webhook, cainjector, startupapicheck) |
+| `tolerations` | `[]` | Tolerations applied to all cert-manager components, letting the pods schedule onto tainted pools (e.g. GKE's `kubernetes.io/arch=arm64:NoSchedule`). Object list: `key`, `operator` (default `"Equal"`), `value`, `effect`. For `Exists`-style tolerations set `operator = "Exists"` and leave `value` empty |
 | `kubeconfig_path` | `""` | Path to the kubeconfig file used by the `kubectl` local-exec provisioner. When empty, `--kubeconfig` is omitted and kubectl uses its standard resolution order (`KUBECONFIG` env var → `~/.kube/config`). Set explicitly to pin to a specific file (see [Troubleshooting](#troubleshooting)) |
 
 No notable outputs.
@@ -445,6 +447,9 @@ module "otel" {
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
 | `namespace_annotations` | `{}` | Additional annotations to apply to the namespace |
 | `mode` | `"daemonset"` | `daemonset` or `deployment` |
+| `release_name` | `"otel"` | Helm release name. Override to run two collectors in one namespace (e.g. a `deployment` gateway plus a `daemonset` agent) |
+| `node_selector` | `{}` | `nodeSelector` pinning the collector (and operator) to matching nodes |
+| `tolerations` | `[]` | Tolerations letting the collector — and, when enabled, the operator — schedule onto tainted pools (e.g. GKE's `kubernetes.io/arch=arm64:NoSchedule`). Object list: `key`, `operator` (default `"Equal"`), `value`, `effect`. For `Exists`-style tolerations set `operator = "Exists"` and leave `value` empty |
 | `tempo_endpoint` | `""` | OTLP gRPC endpoint for Tempo — use `module.tempo.otlp_grpc_endpoint` |
 | `mimir_endpoint` | `""` | Remote write URL for Mimir — use `module.mimir.remote_write_endpoint` |
 | `mimir_tenant_id` | `"anonymous"` | Tenant ID for `X-Scope-OrgID` header sent to Mimir — use `module.mimir.tenant_id` |
@@ -454,6 +459,8 @@ module "otel" {
 | `clickhouse_password` | `""` | ClickHouse password |
 | `clickhouse_database` | `"otel"` | ClickHouse database name for OTLP/ClickHouse exporter |
 | `clickhouse_create_schema` | `true` | Auto-create database and tables on startup. Disable on memory-constrained ClickHouse instances and pre-create the schema manually |
+| `clickhouse_cluster` | `""` | ClickHouse cluster name. Set to emit `ON CLUSTER` DDL so `otel_logs`/`otel_traces` are created on every node of a load-balanced cluster, not just the connected one |
+| `clickhouse_table_engine` | `""` | Table engine for the ClickHouse exporter, e.g. `ReplicatedMergeTree`. Pair with `clickhouse_cluster` for a replicated cluster |
 | `log_parsing.json_enabled` | `true` | Parse JSON pod-log bodies (daemonset mode). When `false`, the `filelog` receiver uses only the `container` operator and bodies stay opaque |
 | `log_parsing.json_match_expr` | `body matches "^\\s*[{]"` | OTel `filelog` `if` guard — only bodies matching this expr are JSON-parsed, so plain-text logs pass through untouched. Override to match your log shape (e.g. `hasPrefix(body, "{")`) |
 | `log_parsing.severity_field` | `"level"` | JSON field mapped to `SeverityText`/`SeverityNumber`. Set `""` to disable severity mapping |

@@ -60,6 +60,12 @@ variable "mimir" {
       gcs_blocks_bucket       = optional(string, "")
       gcs_ruler_bucket        = optional(string, "")
       gcs_alertmanager_bucket = optional(string, "")
+      # Optional object key prefix — allows sharing one bucket across components.
+      # Mimir requires each storage type use a distinct bucket+prefix combo
+      # (e.g. "blocks", "ruler", "alertmanager"), even on GCS.
+      gcs_blocks_prefix       = optional(string, "")
+      gcs_ruler_prefix        = optional(string, "")
+      gcs_alertmanager_prefix = optional(string, "")
       gcs_service_account_key = optional(string, "") # leave empty to use Workload Identity
 
       # Azure — supply names of pre-existing containers

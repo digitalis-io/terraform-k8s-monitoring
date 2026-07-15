@@ -2,6 +2,16 @@ mode: ${mode}
 
 service:
   enabled: true
+%{ if mode == "daemonset" ~}
+  # Node-local routing for the per-node agent: in-cluster OTLP producers that
+  # target this DaemonSet's ClusterIP Service are served by the agent pod on
+  # their OWN node, eliminating the cross-node (and, on a zone-spread cluster,
+  # cross-zone) hop and its inter-zone egress cost. Safe ONLY because a
+  # DaemonSet runs a pod on every node: internalTrafficPolicy Local drops
+  # traffic when the client's node has no local endpoint, so it must never be
+  # set on the deployment gateway Service (most nodes have no gateway pod).
+  internalTrafficPolicy: Local
+%{ endif ~}
 
 ports:
   otlp:
@@ -35,6 +45,32 @@ clusterRole:
     - apiGroups: ["extensions"]
       resources: ["replicasets"]
       verbs: ["get", "watch", "list"]
+%{ if mode == "daemonset" ~}
+    # kubeletstats scrapes the local kubelet :10250 summary API for node/pod/
+    # container/volume metrics.
+    - apiGroups: [""]
+      resources: ["nodes/stats", "nodes/proxy"]
+      verbs: ["get", "list", "watch"]
+%{ endif ~}
+%{ if mode == "deployment" ~}
+    # k8s_cluster watches the API server for object-state metrics (pod phase,
+    # node conditions, deployment/replica counts, resource quotas, ...).
+    - apiGroups: [""]
+      resources: ["events", "namespaces", "namespaces/status", "nodes", "nodes/spec", "pods", "pods/status", "replicationcontrollers", "replicationcontrollers/status", "resourcequotas", "services"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["apps"]
+      resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["extensions"]
+      resources: ["daemonsets", "deployments"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["autoscaling"]
+      resources: ["horizontalpodautoscalers"]
+      verbs: ["get", "list", "watch"]
+%{ endif ~}
 
 extraEnvs:
   - name: KUBE_NODE_NAME
@@ -71,6 +107,7 @@ config:
       protocols:
         grpc:
           endpoint: 0.0.0.0:4317
+          max_recv_msg_size_mib: ${otlp_grpc_max_recv_msg_size_mib}
         http:
           endpoint: 0.0.0.0:4318
 %{ if mode == "daemonset" ~}
@@ -107,7 +144,7 @@ config:
 %{ endif ~}
     hostmetrics:
       root_path: /hostfs
-      collection_interval: 10s
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "10s"}
       scrapers:
         cpu: {}
         load: {}
@@ -128,6 +165,35 @@ config:
           mute_process_io_error: true
           mute_process_user_error: true
         processes: {}
+    # Per-node kubelet metrics: pod/container CPU, memory, network, filesystem,
+    # and volume usage. Talks to the local kubelet over the node's own name
+    # (KUBE_NODE_NAME) on the read-only-authenticated port 10250.
+    kubeletstats:
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "20s"}
+      auth_type: serviceAccount
+      endpoint: "$${env:KUBE_NODE_NAME}:10250"
+      insecure_skip_verify: true
+      metric_groups: [node, pod, container, volume]
+%{ endif ~}
+%{ if mode == "deployment" ~}
+    # Cluster-level object-state metrics from the API server (single watcher).
+    k8s_cluster:
+      auth_type: serviceAccount
+      collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "30s"}
+      node_conditions_to_report: [Ready, MemoryPressure, DiskPressure, PIDPressure, NetworkUnavailable]
+      allocatable_types_to_report: [cpu, memory, ephemeral-storage, storage]
+%{ if length(prometheus_scrape_targets) > 0 ~}
+    # Scrapes static Prometheus exposition-format targets (e.g.
+    # kube-state-metrics), so kube-prometheus-stack-style dashboards that
+    # expect kube_state_metrics metric names render against real data.
+    prometheus:
+      config:
+        scrape_configs:
+          - job_name: kube-state-metrics
+            scrape_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "30s"}
+            static_configs:
+              - targets: ${jsonencode(prometheus_scrape_targets)}
+%{ endif ~}
 %{ endif ~}
 
   processors:
@@ -141,6 +207,36 @@ config:
       check_interval: 5s
       limit_percentage: 80
       spike_limit_percentage: 25
+%{ if service_namespace != "" ~}
+    # Stamp service.namespace on telemetry that lacks it -- notably the host/node
+    # metrics from the hostmetrics/kubeletstats receivers, which carry no
+    # service.namespace of their own. OTel dashboards (e.g. Grafana 20376 OTel
+    # HostMetrics) filter/template on service.namespace, so without this the
+    # host-metrics panels have no values. action=insert -> only fills it in when
+    # absent, never overwrites a service.namespace that app-sourced OTLP set.
+    resource/service_ns:
+      attributes:
+        - key: service.namespace
+          value: "${service_namespace}"
+          action: insert
+%{ endif ~}
+%{ if gigapipe_label_keep != "" ~}
+    # gigapipe/qryn promotes EVERY OTLP resource attribute to an indexed label
+    # (its time_series/fingerprint model has no structured-metadata tier like
+    # Loki does), so a raw dual-write indexes high-card attrs (k8s.pod.name,
+    # k8s.pod.uid, ...) that Loki's index_label_attributes allowlist sheds to
+    # metadata. keep_keys drops every resource attr outside the allowlist so the
+    # gigapipe path indexes the SAME label set as Loki -- an apples-to-apples
+    # cardinality comparison. Applied only on the gigapipe pipeline; ClickHouse
+    # and Loki keep the full attribute set. Trade-off: the dropped attrs are
+    # gone on the gigapipe side (no metadata fallback), unlike Loki.
+    transform/gigapipe_labels:
+      error_mode: ignore
+      log_statements:
+        - context: resource
+          statements:
+            - keep_keys(attributes, [${gigapipe_label_keep}])
+%{ endif ~}
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -181,6 +277,9 @@ config:
 %{ if tempo_endpoint != "" ~}
     otlp/tempo:
       endpoint: ${tempo_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}
@@ -189,10 +288,47 @@ config:
       endpoint: ${mimir_endpoint}
       headers:
         X-Scope-OrgID: "${mimir_tenant_id}"
+      resource_to_telemetry_conversion:
+        enabled: true
+%{ endif ~}
+%{ if mimir2_endpoint != "" ~}
+    prometheusremotewrite/mimir2:
+      endpoint: ${mimir2_endpoint}
+      headers:
+        X-Scope-OrgID: "${mimir2_tenant_id}"
+      resource_to_telemetry_conversion:
+        enabled: true
 %{ endif ~}
 %{ if loki_endpoint != "" ~}
     otlphttp/loki:
       endpoint: ${loki_endpoint}/otlp
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
+      tls:
+        insecure: true
+%{ endif ~}
+%{ if otlphttp_logs_endpoint != "" ~}
+    # Generic OTLP/HTTP logs exporter: for backends without Loki's /otlp
+    # convention (the exporter appends /v1/logs itself), e.g. gigapipe's
+    # native /v1/logs route.
+    otlphttp/logs:
+      endpoint: ${otlphttp_logs_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
+      tls:
+        insecure: true
+%{ endif ~}
+%{ if otlphttp_traces_endpoint != "" ~}
+    # Generic OTLP/HTTP traces exporter: for backends without a gRPC OTLP
+    # receiver (the exporter appends /v1/traces itself), e.g. gigapipe's
+    # native /v1/traces route.
+    otlphttp/traces:
+      endpoint: ${otlphttp_traces_endpoint}
+%{ if otlp_compression != "none" ~}
+      compression: ${otlp_compression}
+%{ endif ~}
       tls:
         insecure: true
 %{ endif ~}
@@ -204,6 +340,13 @@ config:
       password: ${clickhouse_password}
 %{ endif ~}
       database: ${clickhouse_database}
+%{ if clickhouse_cluster != "" ~}
+      cluster_name: ${clickhouse_cluster}
+%{ endif ~}
+%{ if clickhouse_table_engine != "" ~}
+      table_engine:
+        name: ${clickhouse_table_engine}
+%{ endif ~}
       logs_table_name: otel_logs
       traces_table_name: otel_traces
       create_schema: ${clickhouse_create_schema}
@@ -219,16 +362,26 @@ config:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [memory_limiter, k8sattributes, ${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${traces_exporters}
       metrics:
         receivers: ${metrics_receivers}
-        processors: [memory_limiter, k8sattributes, batch]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: ${logs_receivers}
-        processors: [memory_limiter, k8sattributes, ${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${logs_exporters}
+%{ if gigapipe_label_keep != "" ~}
+      # Dedicated gigapipe logs pipeline: same receivers/enrichment as the main
+      # logs pipeline, plus transform/gigapipe_labels to trim resource attrs to
+      # the Loki allowlist before the otlphttp/logs (gigapipe) exporter. Kept out
+      # of the main pipeline so ClickHouse/Loki still receive the full attr set.
+      logs/gigapipe:
+        receivers: ${logs_receivers}
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}transform/gigapipe_labels, batch]
+        exporters: [otlphttp/logs]
+%{ endif ~}
 
 resources:
   requests:
@@ -244,5 +397,22 @@ serviceAccount:
   annotations:
 %{ for key, value in service_account_annotations ~}
     ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+%{ if length(node_selector) > 0 ~}
+nodeSelector:
+%{ for key, value in node_selector ~}
+  ${key}: "${value}"
+%{ endfor ~}
+%{ endif ~}
+%{ if length(tolerations) > 0 ~}
+tolerations:
+%{ for t in tolerations ~}
+  - key: "${t.key}"
+    operator: "${t.operator}"
+%{ if t.value != "" ~}
+    value: "${t.value}"
+%{ endif ~}
+    effect: "${t.effect}"
 %{ endfor ~}
 %{ endif ~}

@@ -2,6 +2,14 @@ locals {
   faro_enabled = try(var.alloy.faro_receiver.enabled, false)
   faro_port    = try(var.alloy.faro_receiver.port, 12347)
 
+  # Tolerations with empty `value` dropped (Exists-style entries).
+  tolerations = [
+    for t in var.alloy.tolerations : merge(
+      { key = t.key, operator = t.operator, effect = t.effect },
+      t.value != "" ? { value = t.value } : {},
+    )
+  ]
+
   # OTLP-receiver branch (alloy_config = ""): fan out each signal to every
   # configured destination. mimir/loki/tempo and otel_grpc_endpoint are
   # independent — set one, the other, or both for a dual-write.
@@ -128,6 +136,14 @@ resource "helm_release" "alloy" {
       mimir_tenant_id    = var.alloy.mimir_tenant_id
       pyroscope_endpoint = var.alloy.pyroscope_endpoint
       otel_grpc_endpoint = var.alloy.otel_grpc_endpoint
+
+      # eBPF continuous profiling
+      ebpf_profiling_enabled = try(var.alloy.ebpf_profiling.enabled, false)
+      ebpf_collect_interval  = try(var.alloy.ebpf_profiling.collect_interval, "15s")
+      ebpf_demangle          = try(var.alloy.ebpf_profiling.demangle, "none")
+
+      node_selector = var.alloy.node_selector
+      tolerations   = local.tolerations
 
       # Pre-computed fan-out lists for the OTLP-receiver branch
       metrics_outputs = local.metrics_outputs
