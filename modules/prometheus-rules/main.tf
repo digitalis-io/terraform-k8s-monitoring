@@ -49,11 +49,15 @@ resource "terraform_data" "alertmanager_config" {
   triggers_replace = [
     var.prometheus_rules.prometheus_release_id,
     var.prometheus_rules.slack.enabled,
-    var.prometheus_rules.slack.webhook_url,
+    # Hash the credentials rather than storing them raw — triggers_replace is a
+    # plain (non-sensitive) attribute and would otherwise echo the Slack webhook
+    # URL / PagerDuty routing key in plan output. The hash still changes when the
+    # credential changes, so the config is re-applied.
+    sha256(var.prometheus_rules.slack.webhook_url),
     var.prometheus_rules.slack.channel,
     var.prometheus_rules.slack.min_severity,
     var.prometheus_rules.pagerduty.enabled,
-    var.prometheus_rules.pagerduty.routing_key,
+    sha256(var.prometheus_rules.pagerduty.routing_key),
     var.prometheus_rules.pagerduty.min_severity,
   ]
 
@@ -74,7 +78,13 @@ YAML
     EOT
 }
 
-depends_on = [terraform_data.prometheus_rule]
+# The AlertmanagerConfig references the Slack/PagerDuty Secrets by name, so they
+# must exist before it is applied.
+depends_on = [
+  terraform_data.prometheus_rule,
+  kubernetes_secret.slack,
+  kubernetes_secret.pagerduty,
+]
 }
 
 # Kubernetes Secrets for sensitive receiver credentials.

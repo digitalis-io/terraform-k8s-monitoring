@@ -59,8 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `modules/mimir`: `ingress_host` validation now enforces RFC 1123 hostname format in addition to requiring a non-empty value when `ingress_enabled = true`.
 - `modules/prometheus`: `grafana_ingress.host`, `prometheus_ingress.host`, and `alertmanager_ingress.host` validation now enforces RFC 1123 hostname format when the respective ingress is enabled.
 
+### Security
+
+- `modules/grafana-rules`: contact points (which embed the Slack webhook URL and PagerDuty integration key) are now provisioned as a Kubernetes **Secret** instead of a ConfigMap. ConfigMaps are stored in plaintext and have weaker RBAC than Secrets; the Grafana alerting sidecar watches both resource types (chart default `sidecar.alerts.resource = "both"`), so provisioning is unaffected.
+- `modules/prometheus-rules`: the Slack webhook URL and PagerDuty routing key are no longer stored raw in the AlertmanagerConfig `terraform_data.triggers_replace` (a non-sensitive attribute that echoed them in plan output). They are hashed with `sha256` — the config still re-applies when a credential changes. The credentials themselves continue to live only in Kubernetes Secrets.
+
 ### Fixed
 
+- `modules/prometheus-rules`: the AlertmanagerConfig now `depends_on` the Slack/PagerDuty Secrets it references by name, so they are guaranteed to exist before it is applied.
 - `modules/loki`: the `storage` block now explicitly nulls out every backend sub-block (`s3`/`gcs`/`azure`/`filesystem`) except the selected `storage_backend`. The chart's own defaults populate all backend blocks and Helm's value merge does not drop the unset ones, so `loki.commonStorageConfig` saw multiple backends "configured" at once and refused to start ("too many storage configs provided in the common config").
 - `modules/alloy`: the `controller:` Helm values block (`type`/`hostPID`/`nodeSelector`/`tolerations`) was emitted nested inside `alloy:` instead of as a top-level sibling key. The chart reads `.Values.controller`, not `.Values.alloy.controller`, so Helm silently dropped all of it regardless of what was set — `controller_type`, `replicas`, and (once added) the new `node_selector`/`tolerations`/`ebpf_profiling` hostPID setting never actually applied. Moved the block to the end of the template, after `ingress:` (which was already correctly top-level), matching the chart's real values schema.
 - `modules/alloy`: the `sensitive_data` OTTL statements already contain real `"` characters (e.g. `delete_key(attributes, "token")`), but the template re-wrapped each one in another unescaped `"${statement}"`, producing invalid River syntax (`missing ',' in expression list`) whenever `sensitive_data.enabled` was left at its default `true`. Now escaped via `replace(statement, "\"", "\\\"")` at each of the three (log/trace/metric) statement lists.
