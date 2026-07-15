@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `examples/gcp/mimir-gcs`: new example — a metrics-only slice deploying Grafana Mimir with a GCS backend (Workload Identity, keyless) plus a Grafana-only kube-prometheus-stack install, with ingress TLS issued by cert-manager via ACME/Let's Encrypt. External Prometheus/OTel remote-writes into Mimir; no local Prometheus, Loki, or Tempo.
 - `modules/mimir`: `create_namespace` variable (default `true`) — set to `false` to deploy Mimir into a namespace managed elsewhere (bring-your-own-namespace), matching the existing behaviour of `modules/loki`. Previously the module always created its namespace, so `apply` failed when the namespace already existed. Fixes [#24](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/24).
 - `modules/mimir`: `storage.gcs_blocks_prefix`, `storage.gcs_ruler_prefix`, and `storage.gcs_alertmanager_prefix` variables — object key prefixes (rendered as `storage_prefix`) for the blocks/ruler/alertmanager GCS backends, letting Mimir share one GCS bucket across components (each storage type needs a distinct bucket+prefix combo). Empty (default) omits the prefix.
 - `modules/otel-collector`: `mimir2_endpoint` and `mimir2_tenant_id` variables — a second, independent Prometheus remote-write target (`prometheusremotewrite/mimir2`) so metrics can dual-write to two backends at once without one exporter replacing the other. Empty (default) disables the second target.
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `README.md`: examples table now lists `examples/s3compatible/` (previously undocumented) and the new `examples/gcp/mimir-gcs/`, and labels `examples/gcp/` as the full-stack variant.
 - `modules/prometheus`: `grafana_database` null-safety on OpenTofu < 1.11 / Terraform. Older engines eagerly evaluate both sides of `&&`/`||`, so the `grafana_database == null || …` and `grafana_database != null && …` guards still errored with "Attempt to get attribute from null value" whenever `grafana_database` was unset (the default). The five variable validations and the `grafana_db_create_secret` local are now wrapped in `try(…)`, so a plan with the default (no external DB) succeeds on OpenTofu 1.9.x.
 
 ### Changed

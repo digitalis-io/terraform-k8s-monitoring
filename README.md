@@ -786,7 +786,9 @@ Complete, copy-paste examples are available in the `examples/` directory:
 | `examples/alloy-basic/` | Alloy DaemonSet collector wired to Loki, Tempo, and Mimir |
 | `examples/alloy-faro-receiver/` | Alloy DaemonSet collector plus a second Alloy release configured as a Faro RUM receiver, both wired to Loki and Tempo |
 | `examples/aws/` | S3 backend with IRSA authentication on EKS |
-| `examples/gcp/` | GCS backend with Workload Identity on GKE |
+| `examples/s3compatible/` | S3-compatible storage (Hetzner, MinIO, Ceph) with path-style addressing |
+| `examples/gcp/` | Full stack on GCS backend with Workload Identity on GKE |
+| `examples/gcp/mimir-gcs/` | Metrics-only slice — Mimir (GCS) + Grafana on GKE, with ACME/Let's Encrypt ingress TLS |
 
 ### Use S3 for Mimir storage (with IRSA)
 
