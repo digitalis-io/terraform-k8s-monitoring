@@ -4,8 +4,13 @@ output "namespace" {
 }
 
 output "cluster_issuer_name" {
-  description = "Name of the self-signed ClusterIssuer. Use as cert-manager.io/cluster-issuer annotation value."
+  description = "Name of the ClusterIssuer created by the module. Use as the cert-manager.io/cluster-issuer annotation value."
   value       = var.cert_manager.cluster_issuer_name
+}
+
+output "cluster_issuer_manifest" {
+  description = "Rendered ClusterIssuer manifest applied by the module (reflects issuer.type)."
+  value       = local.cert_manager_cluster_issuer
 }
 
 output "helm_release_name" {
