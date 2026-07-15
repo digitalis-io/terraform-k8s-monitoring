@@ -84,6 +84,21 @@ variable "alloy" {
     pyroscope_endpoint = optional(string, "") # e.g. module.pyroscope.push_url
     otel_grpc_endpoint = optional(string, "") # e.g. module.otel.otlp_grpc_endpoint -- fans out alongside mimir/loki/tempo_endpoint (set any combination for direct-only, otel-only, or dual-write). Only honored by the OTLP-receiver config (faro_receiver.enabled = false); the Faro branch always sends logs/traces direct to loki/tempo_endpoint.
 
+    # Continuous eBPF profiling: discovers pods annotated
+    # `profiles.grafana.com/cpu.scrape: "true"` (standard Grafana/Pyroscope
+    # convention) and profiles them via Alloy's pyroscope.ebpf component,
+    # pushing to pyroscope_endpoint (must be set; a no-op otherwise). Requires
+    # privileged + hostPID (eBPF needs kernel access and cross-container PID
+    # visibility) -- only meaningful with controller_type = "daemonset" (one
+    # profiler per node). Only wired into the built-in config (alloy_config
+    # must be empty); a non-empty alloy_config takes full control.
+    ebpf_profiling = optional(object({
+      enabled          = optional(bool, false)
+      collect_interval = optional(string, "15s")
+      # none | simplified | templates | full -- C++/Rust symbol demangling detail.
+      demangle = optional(string, "none")
+    }), {})
+
     # Annotations added to the Alloy ServiceAccount.
     # Use for IRSA, GKE Workload Identity, or Azure Workload Identity.
     # No IAM resources are created by this module; pre-create the role/SA and supply the annotation here.
@@ -91,6 +106,17 @@ variable "alloy" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/alloy" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "alloy@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Pod scheduling. nodeSelector pins Alloy to matching nodes; tolerations
+    # let it schedule onto tainted pools (e.g. an Arm64 node pool's
+    # kubernetes.io/arch=arm64:NoSchedule taint).
+    node_selector = optional(map(string), {})
+    tolerations = optional(list(object({
+      key      = optional(string, "")
+      operator = optional(string, "Equal")
+      value    = optional(string, "")
+      effect   = optional(string, "")
+    })), [])
 
     # Arbitrary extra Helm values merged last; highest precedence over the template.
     extra_values = optional(string, "")
@@ -144,5 +170,20 @@ variable "alloy" {
       for action in values(try(var.alloy.sensitive_data.custom_rules, {})) : contains(["hash", "delete"], action)
     ])
     error_message = "sensitive_data.custom_rules values must be 'hash' or 'delete'."
+  }
+
+  validation {
+    condition     = !try(var.alloy.ebpf_profiling.enabled, false) || var.alloy.pyroscope_endpoint != ""
+    error_message = "ebpf_profiling.enabled requires pyroscope_endpoint to be set."
+  }
+
+  validation {
+    condition     = !try(var.alloy.ebpf_profiling.enabled, false) || var.alloy.controller_type == "daemonset"
+    error_message = "ebpf_profiling.enabled requires controller_type = \"daemonset\" (one profiler per node)."
+  }
+
+  validation {
+    condition     = contains(["none", "simplified", "templates", "full"], try(var.alloy.ebpf_profiling.demangle, "none"))
+    error_message = "ebpf_profiling.demangle must be one of: none, simplified, templates, full."
   }
 }

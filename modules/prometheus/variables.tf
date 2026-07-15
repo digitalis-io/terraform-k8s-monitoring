@@ -183,45 +183,54 @@ variable "prometheus" {
     error_message = "grafana_replicas > 1 requires grafana_database (external PostgreSQL/MySQL); SQLite cannot be shared across Grafana pods."
   }
 
+  # try(..., true) guards the null-object case: OpenTofu <1.11 eagerly evaluates
+  # both sides of `||`, so a `grafana_database == null || <access .attr>` guard
+  # still errors ("Attempt to get attribute from null value") when the object is
+  # null. try() catches that and treats an unset grafana_database as valid.
   validation {
-    condition = (
+    condition = try(
       var.prometheus.grafana_database == null ||
-      contains(["postgres", "mysql"], var.prometheus.grafana_database.type)
+      contains(["postgres", "mysql"], var.prometheus.grafana_database.type),
+      true
     )
     error_message = "grafana_database.type must be either \"postgres\" or \"mysql\"."
   }
 
   validation {
-    condition = (
+    condition = try(
       var.prometheus.grafana_database == null ||
-      !(var.prometheus.grafana_database.password != "" && var.prometheus.grafana_database.password_secret != null)
+      !(var.prometheus.grafana_database.password != "" && var.prometheus.grafana_database.password_secret != null),
+      true
     )
     error_message = "grafana_database: set at most one of password or password_secret, not both."
   }
 
   validation {
-    condition = (
+    condition = try(
       var.prometheus.grafana_database == null ||
       (var.prometheus.grafana_database.host != "" &&
         var.prometheus.grafana_database.name != "" &&
-      var.prometheus.grafana_database.user != "")
+      var.prometheus.grafana_database.user != ""),
+      true
     )
     error_message = "grafana_database requires non-empty host, name, and user."
   }
 
   validation {
-    condition = (
+    condition = try(
       var.prometheus.grafana_database == null ||
-      can(regex("^[^:/\\s]+:[0-9]+$", var.prometheus.grafana_database.host))
+      can(regex("^[^:/\\s]+:[0-9]+$", var.prometheus.grafana_database.host)),
+      true
     )
     error_message = "grafana_database.host must be in \"host:port\" form, e.g. \"pg.db.svc:5432\"."
   }
 
   validation {
-    condition = (
+    condition = try(
       var.prometheus.grafana_database == null ||
       var.prometheus.grafana_database.ssl_mode == "" ||
-      var.prometheus.grafana_database.type == "postgres"
+      var.prometheus.grafana_database.type == "postgres",
+      true
     )
     error_message = "grafana_database.ssl_mode is only supported for type = \"postgres\"; leave it \"\" for mysql."
   }

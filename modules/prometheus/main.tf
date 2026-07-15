@@ -3,10 +3,14 @@ locals {
 
   # Create a Secret from a plaintext password only when one is given and the
   # caller has not referenced an existing Secret.
-  grafana_db_create_secret = (
+  # try(..., false) guards the null-object case: OpenTofu <1.11 eagerly evaluates
+  # both sides of `&&`, so the `grafana_db != null &&` guard still errors on the
+  # attribute access when grafana_database is unset (the default).
+  grafana_db_create_secret = try(
     local.grafana_db != null &&
     local.grafana_db.password_secret == null &&
-    local.grafana_db.password != ""
+    local.grafana_db.password != "",
+    false
   )
 
   # Resolve where GF_DATABASE_PASSWORD is sourced from: an existing Secret, the

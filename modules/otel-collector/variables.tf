@@ -7,17 +7,66 @@ variable "otel" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
     mode                  = optional(string, "daemonset") # daemonset | deployment
+    # Helm release name. Override when running two collectors in one namespace
+    # (e.g. a "deployment" gateway plus a "daemonset" log/host agent).
+    release_name = optional(string, "otel")
 
     # Wire from sibling module outputs
-    tempo_endpoint           = optional(string, "")          # OTLP gRPC :4317 -- use module.tempo.otlp_grpc_endpoint
-    mimir_endpoint           = optional(string, "")          # remote_write URL -- use module.mimir.remote_write_endpoint
-    mimir_tenant_id          = optional(string, "anonymous") # X-Scope-OrgID header -- wire from module.mimir.tenant_id
-    loki_endpoint            = optional(string, "")          # Loki push :3100 -- use module.loki.datasource_url
-    clickhouse_endpoint      = optional(string, "")          # ClickHouse HTTP :8123 -- use module.clickhouse.http_endpoint
-    clickhouse_username      = optional(string, "")          # ClickHouse username for OTLP/ClickHouse exporter
-    clickhouse_password      = optional(string, "")          # ClickHouse password for OTLP/ClickHouse exporter
-    clickhouse_database      = optional(string, "otel")      # ClickHouse database for OTLP/ClickHouse exporter
-    clickhouse_create_schema = optional(bool, true)          # auto-create DB/tables on startup
+    tempo_endpoint  = optional(string, "")          # OTLP gRPC :4317 -- use module.tempo.otlp_grpc_endpoint
+    mimir_endpoint  = optional(string, "")          # remote_write URL -- use module.mimir.remote_write_endpoint
+    mimir_tenant_id = optional(string, "anonymous") # X-Scope-OrgID header -- wire from module.mimir.tenant_id
+    # Second, independent Prometheus remote_write target. Lets metrics dual-write
+    # to two backends at once (e.g. an eval candidate on mimir_endpoint plus a
+    # real Mimir instance here) without one exporter replacing the other.
+    mimir2_endpoint  = optional(string, "")
+    mimir2_tenant_id = optional(string, "anonymous")
+    loki_endpoint    = optional(string, "") # Loki push :3100 -- use module.loki.datasource_url
+    # Static scrape targets for an additional `prometheus` receiver
+    # (mode = "deployment" only) -- e.g. a kube-state-metrics Service
+    # ("kube-state-metrics.monitoring.svc:8080"). Empty list omits the
+    # receiver entirely.
+    prometheus_scrape_targets = optional(list(string), [])
+    # Generic OTLP/HTTP exporters for backends that speak plain OTLP/HTTP but
+    # don't match the Loki (`<endpoint>/otlp`) or Tempo (gRPC :4317) conventions
+    # above -- e.g. gigapipe's native /v1/logs and /v1/traces routes. Each is a
+    # base URL; the otlphttp exporter appends /v1/logs or /v1/traces itself.
+    otlphttp_logs_endpoint   = optional(string, "")
+    otlphttp_traces_endpoint = optional(string, "")
+    # Resource-attribute allowlist for the gigapipe (otlphttp/logs) path. gigapipe
+    # indexes every resource attr as a label (no metadata tier), so a raw
+    # dual-write indexes far more labels than Loki's index_label_attributes
+    # allowlist. When set (and otlphttp_logs_endpoint != ""), logs to gigapipe run
+    # a separate pipeline that keep_keys()-trims resource attrs to this list, so
+    # gigapipe and Loki index the same labels. [] => off (gigapipe indexes all).
+    # Set this to the SAME list as the Loki module's index_label_attributes.
+    logs_gigapipe_label_allowlist = optional(list(string), [])
+    # Wire-compression for the OTLP exporters (otlp/tempo, otlphttp/loki,
+    # otlphttp/logs, otlphttp/traces). OTLP defaults to no compression, so on a
+    # zone-spread cluster every export leg pays inter-zone egress on raw bytes;
+    # gzip/zstd typically shrink telemetry ~5-10x. "none" disables it.
+    # prometheusremotewrite is always snappy-compressed (spec) and unaffected.
+    otlp_compression = optional(string, "gzip")
+    # Max gRPC receive message size (MiB) for the OTLP gRPC receiver. gRPC's
+    # default is 4 MiB; raise it when producers send batches that exceed 4 MiB
+    # after decompression (the receiver otherwise rejects them with
+    # ResourceExhausted). Only affects the gRPC receiver (:4317).
+    otlp_grpc_max_recv_msg_size_mib = optional(number, 4)
+    # Stamp service.namespace on telemetry that lacks it (host/node metrics from
+    # the hostmetrics/kubeletstats receivers) via a resource processor with
+    # action=insert, so OTel dashboards that filter on service.namespace (e.g.
+    # Grafana 20376) resolve. Empty disables the processor.
+    service_namespace = optional(string, "")
+    # Uniform collection_interval override for the metrics receivers below
+    # (hostmetrics, kubeletstats, k8s_cluster) -- each otherwise defaults to a
+    # different interval (10s/20s/30s). Empty keeps those per-receiver defaults.
+    metrics_collection_interval = optional(string, "")
+    clickhouse_endpoint         = optional(string, "")     # ClickHouse HTTP :8123 -- use module.clickhouse.http_endpoint
+    clickhouse_username         = optional(string, "")     # ClickHouse username for OTLP/ClickHouse exporter
+    clickhouse_password         = optional(string, "")     # ClickHouse password for OTLP/ClickHouse exporter
+    clickhouse_database         = optional(string, "otel") # ClickHouse database for OTLP/ClickHouse exporter
+    clickhouse_create_schema    = optional(bool, true)     # auto-create DB/tables on startup
+    clickhouse_cluster          = optional(string, "")     # cluster name -> ON CLUSTER DDL (creates tables on all nodes)
+    clickhouse_table_engine     = optional(string, "")     # e.g. ReplicatedMergeTree (pair with clickhouse_cluster for replication)
 
     # Structured-log parsing for the daemonset `filelog` receiver.
     # Promotes trace context and severity from JSON pod logs into native OTel
@@ -67,6 +116,17 @@ variable "otel" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/otel" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "otel@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Pod scheduling. nodeSelector pins the collector to matching nodes;
+    # tolerations let it schedule onto tainted pools (e.g. GKE's automatic
+    # kubernetes.io/arch=arm64:NoSchedule taint on Arm node pools).
+    node_selector = optional(map(string), {})
+    tolerations = optional(list(object({
+      key      = optional(string, "")
+      operator = optional(string, "Equal")
+      value    = optional(string, "")
+      effect   = optional(string, "")
+    })), [])
 
     operator = optional(object({
       enabled                    = optional(bool, false)

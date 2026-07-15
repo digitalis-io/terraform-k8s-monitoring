@@ -17,11 +17,23 @@ loki:
     retention_period: ${retention_period}
     volume_enabled: true
   storage:
+    type: ${storage_backend}
+    # The chart's own defaults populate every backend sub-block (s3/gcs/azure/
+    # filesystem) regardless of `type`, and Helm's values merge doesn't drop
+    # them just because they're unset here -- left as-is, the chart's
+    # loki.commonStorageConfig helper sees multiple backends "configured"
+    # simultaneously and refuses to start ("too many storage configs provided
+    # in the common config"). Explicitly null out every backend except the
+    # selected one.
 %{ if storage_backend == "local" ~}
-    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+      admin_api_directory: /var/loki/admin
+%{ else ~}
+    filesystem: null
 %{ endif ~}
 %{ if storage_backend == "s3" ~}
-    type: s3
     s3:
       region: ${s3_region}
 %{ if s3_endpoint != "" ~}
@@ -43,19 +55,23 @@ loki:
     bucketNames:
       chunks: ${s3_chunks_bucket}
       ruler: ${s3_ruler_bucket}
+%{ else ~}
+    s3: null
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
-    type: gcs
-    gcs:
 %{ if gcs_service_account_key != "" ~}
+    gcs:
       service_account: ${gcs_service_account_key}
+%{ else ~}
+    gcs: {}
 %{ endif ~}
     bucketNames:
       chunks: ${gcs_chunks_bucket}
       ruler: ${gcs_ruler_bucket}
+%{ else ~}
+    gcs: null
 %{ endif ~}
 %{ if storage_backend == "azure" ~}
-    type: azure
     azure:
       accountName: ${azure_storage_account}
 %{ if azure_storage_account_key != "" ~}
@@ -64,6 +80,8 @@ loki:
     bucketNames:
       chunks: ${azure_chunks_container}
       ruler: ${azure_ruler_container}
+%{ else ~}
+    azure: null
 %{ endif ~}
 
 %{ if deployment_mode == "single-binary" ~}

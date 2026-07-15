@@ -1,18 +1,54 @@
 locals {
   _traces_list = compact([
     var.otel.tempo_endpoint != "" ? "otlp/tempo" : "",
+    var.otel.otlphttp_traces_endpoint != "" ? "otlphttp/traces" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
+  # When a gigapipe label allowlist is set, the otlphttp/logs (gigapipe) exporter
+  # moves to its own logs/gigapipe pipeline (with the keep_keys trim), so it is
+  # dropped from the main logs pipeline here to avoid a double-write.
+  _logs_split_gigapipe = var.otel.otlphttp_logs_endpoint != "" && length(var.otel.logs_gigapipe_label_allowlist) > 0
   _logs_list = compact([
     var.otel.loki_endpoint != "" ? "otlphttp/loki" : "",
+    (var.otel.otlphttp_logs_endpoint != "" && !local._logs_split_gigapipe) ? "otlphttp/logs" : "",
+    var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
+  ])
+  # OTTL string-list literal for keep_keys, e.g. `"service.name", "k8s.namespace.name"`.
+  # Empty string => feature off (no split pipeline, no processor).
+  gigapipe_label_keep = local._logs_split_gigapipe ? join(", ", [
+    for k in var.otel.logs_gigapipe_label_allowlist : "\"${k}\""
+  ]) : ""
+  _metrics_list = compact([
+    var.otel.mimir_endpoint != "" ? "prometheusremotewrite" : "",
+    var.otel.mimir2_endpoint != "" ? "prometheusremotewrite/mimir2" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
 
   traces_exporters  = length(local._traces_list) > 0 ? "[${join(", ", local._traces_list)}]" : "[debug]"
-  metrics_exporters = var.otel.mimir_endpoint != "" ? "[prometheusremotewrite]" : "[debug]"
+  metrics_exporters = length(local._metrics_list) > 0 ? "[${join(", ", local._metrics_list)}]" : "[debug]"
   logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
-  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics]" : "[otlp]"
+  # daemonset: node OS metrics (hostmetrics) + per-node kubelet pod/container
+  # metrics (kubeletstats). deployment: cluster-singleton object-state metrics
+  # (k8s_cluster) — one watcher for the whole API, so it belongs on the single
+  # deployment replica, never the per-node daemonset (would duplicate). The
+  # `prometheus` receiver (scraping e.g. kube-state-metrics) is opt-in via
+  # prometheus_scrape_targets, deployment mode only (a single scraper, like
+  # k8s_cluster, not one per node).
+  _metrics_receivers_deployment = concat(
+    ["otlp", "k8s_cluster"],
+    length(var.otel.prometheus_scrape_targets) > 0 ? ["prometheus"] : [],
+  )
+  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[${join(", ", local._metrics_receivers_deployment)}]"
+
+  # Tolerations with empty `value` dropped (Exists-style entries), for the
+  # operator Helm values (yamlencode).
+  operator_tolerations = [
+    for t in var.otel.tolerations : merge(
+      { key = t.key, operator = t.operator, effect = t.effect },
+      t.value != "" ? { value = t.value } : {},
+    )
+  ]
 }
 
 resource "kubernetes_namespace" "otel" {
@@ -32,7 +68,7 @@ resource "kubernetes_namespace" "otel" {
 }
 
 resource "helm_release" "otel" {
-  name       = "otel"
+  name       = var.otel.release_name
   repository = "https://open-telemetry.github.io/opentelemetry-helm-charts"
   chart      = "opentelemetry-collector"
   version    = var.otel.chart_version
@@ -56,11 +92,23 @@ resource "helm_release" "otel" {
       tempo_endpoint           = var.otel.tempo_endpoint
       mimir_endpoint           = var.otel.mimir_endpoint
       mimir_tenant_id          = var.otel.mimir_tenant_id
+      mimir2_endpoint          = var.otel.mimir2_endpoint
+      mimir2_tenant_id         = var.otel.mimir2_tenant_id
       loki_endpoint            = var.otel.loki_endpoint
-      clickhouse_username      = var.otel.clickhouse_username
-      clickhouse_password      = var.otel.clickhouse_password
-      clickhouse_database      = var.otel.clickhouse_database
-      clickhouse_create_schema = var.otel.clickhouse_create_schema
+      otlphttp_logs_endpoint   = var.otel.otlphttp_logs_endpoint
+      otlphttp_traces_endpoint = var.otel.otlphttp_traces_endpoint
+      otlp_compression         = var.otel.otlp_compression
+
+      otlp_grpc_max_recv_msg_size_mib = var.otel.otlp_grpc_max_recv_msg_size_mib
+      service_namespace               = var.otel.service_namespace
+      metrics_collection_interval     = var.otel.metrics_collection_interval
+      prometheus_scrape_targets       = var.otel.prometheus_scrape_targets
+      clickhouse_username             = var.otel.clickhouse_username
+      clickhouse_password             = var.otel.clickhouse_password
+      clickhouse_database             = var.otel.clickhouse_database
+      clickhouse_create_schema        = var.otel.clickhouse_create_schema
+      clickhouse_cluster              = var.otel.clickhouse_cluster
+      clickhouse_table_engine         = var.otel.clickhouse_table_engine
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled
@@ -75,6 +123,7 @@ resource "helm_release" "otel" {
       metrics_exporters   = local.metrics_exporters
       logs_exporters      = local.logs_exporters
       logs_receivers      = local.logs_receivers
+      gigapipe_label_keep = local.gigapipe_label_keep
       metrics_receivers   = local.metrics_receivers
       clickhouse_endpoint = var.otel.clickhouse_endpoint
 
@@ -85,6 +134,10 @@ resource "helm_release" "otel" {
       limits_memory   = var.otel.resources.limits_memory
 
       service_account_annotations = var.otel.service_account_annotations
+
+      # Scheduling
+      node_selector = var.otel.node_selector
+      tolerations   = var.otel.tolerations
     }))
   ]
 
@@ -107,6 +160,9 @@ resource "helm_release" "otel_operator" {
 
   values = [
     yamlencode({
+      # Schedule the operator manager onto tainted pools (e.g. arm64).
+      nodeSelector = var.otel.node_selector
+      tolerations  = local.operator_tolerations
       manager = {
         collectorImage = {
           repository = try(var.otel.operator.collector_image_repository, "otel/opentelemetry-collector-k8s")

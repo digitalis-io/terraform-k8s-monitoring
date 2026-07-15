@@ -104,7 +104,8 @@ resource "helm_release" "tempo" {
 
       service_account_annotations        = var.tempo.service_account_annotations
       metrics_generator_remote_write_url = var.tempo.metrics_generator_remote_write_url
-    })
+    }),
+    var.tempo.extra_values
   ]
 
   depends_on = [kubernetes_namespace.tempo, kubernetes_secret.tempo_s3_credentials]
