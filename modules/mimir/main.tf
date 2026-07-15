@@ -92,6 +92,9 @@ resource "helm_release" "mimir" {
       gcs_blocks_bucket       = var.mimir.storage.gcs_blocks_bucket
       gcs_ruler_bucket        = var.mimir.storage.gcs_ruler_bucket
       gcs_alertmanager_bucket = var.mimir.storage.gcs_alertmanager_bucket
+      gcs_blocks_prefix       = var.mimir.storage.gcs_blocks_prefix
+      gcs_ruler_prefix        = var.mimir.storage.gcs_ruler_prefix
+      gcs_alertmanager_prefix = var.mimir.storage.gcs_alertmanager_prefix
 
       # Azure
       azure_storage_account        = var.mimir.storage.azure_storage_account

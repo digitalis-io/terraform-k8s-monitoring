@@ -44,6 +44,9 @@ mimir:
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
+%{ if gcs_blocks_prefix != "" ~}
+      storage_prefix: ${gcs_blocks_prefix}
+%{ endif ~}
       gcs:
         bucket_name: ${gcs_blocks_bucket}
 %{ endif ~}
@@ -87,6 +90,9 @@ mimir:
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
+%{ if gcs_alertmanager_prefix != "" ~}
+      storage_prefix: ${gcs_alertmanager_prefix}
+%{ endif ~}
       gcs:
         bucket_name: ${gcs_alertmanager_bucket}
 %{ endif ~}
@@ -127,6 +133,9 @@ mimir:
 %{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "gcs" ~}
+%{ if gcs_ruler_prefix != "" ~}
+      storage_prefix: ${gcs_ruler_prefix}
+%{ endif ~}
       gcs:
         bucket_name: ${gcs_ruler_bucket}
 %{ endif ~}

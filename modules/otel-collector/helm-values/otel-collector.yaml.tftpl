@@ -107,6 +107,7 @@ config:
       protocols:
         grpc:
           endpoint: 0.0.0.0:4317
+          max_recv_msg_size_mib: ${otlp_grpc_max_recv_msg_size_mib}
         http:
           endpoint: 0.0.0.0:4318
 %{ if mode == "daemonset" ~}
@@ -219,6 +220,23 @@ config:
           value: "${service_namespace}"
           action: insert
 %{ endif ~}
+%{ if gigapipe_label_keep != "" ~}
+    # gigapipe/qryn promotes EVERY OTLP resource attribute to an indexed label
+    # (its time_series/fingerprint model has no structured-metadata tier like
+    # Loki does), so a raw dual-write indexes high-card attrs (k8s.pod.name,
+    # k8s.pod.uid, ...) that Loki's index_label_attributes allowlist sheds to
+    # metadata. keep_keys drops every resource attr outside the allowlist so the
+    # gigapipe path indexes the SAME label set as Loki -- an apples-to-apples
+    # cardinality comparison. Applied only on the gigapipe pipeline; ClickHouse
+    # and Loki keep the full attribute set. Trade-off: the dropped attrs are
+    # gone on the gigapipe side (no metadata fallback), unlike Loki.
+    transform/gigapipe_labels:
+      error_mode: ignore
+      log_statements:
+        - context: resource
+          statements:
+            - keep_keys(attributes, [${gigapipe_label_keep}])
+%{ endif ~}
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -270,12 +288,14 @@ config:
       endpoint: ${mimir_endpoint}
       headers:
         X-Scope-OrgID: "${mimir_tenant_id}"
-      # Promote OTel resource attributes (service.namespace, host.name, gcp
-      # detection attrs, ...) to per-series Prometheus labels. Without this the
-      # exporter keeps them in target_info only, so host/node metrics carry no
-      # service_namespace/host label and OTel dashboards (Grafana 20376
-      # HostMetrics) template vars (var-service_namespace, var-host) resolve to
-      # nothing. Raises cardinality -- acceptable for the PoC.
+      resource_to_telemetry_conversion:
+        enabled: true
+%{ endif ~}
+%{ if mimir2_endpoint != "" ~}
+    prometheusremotewrite/mimir2:
+      endpoint: ${mimir2_endpoint}
+      headers:
+        X-Scope-OrgID: "${mimir2_tenant_id}"
       resource_to_telemetry_conversion:
         enabled: true
 %{ endif ~}
@@ -352,6 +372,16 @@ config:
         receivers: ${logs_receivers}
         processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${logs_exporters}
+%{ if gigapipe_label_keep != "" ~}
+      # Dedicated gigapipe logs pipeline: same receivers/enrichment as the main
+      # logs pipeline, plus transform/gigapipe_labels to trim resource attrs to
+      # the Loki allowlist before the otlphttp/logs (gigapipe) exporter. Kept out
+      # of the main pipeline so ClickHouse/Loki still receive the full attr set.
+      logs/gigapipe:
+        receivers: ${logs_receivers}
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}transform/gigapipe_labels, batch]
+        exporters: [otlphttp/logs]
+%{ endif ~}
 
 resources:
   requests:

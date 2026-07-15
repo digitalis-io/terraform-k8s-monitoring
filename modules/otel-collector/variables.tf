@@ -15,7 +15,12 @@ variable "otel" {
     tempo_endpoint  = optional(string, "")          # OTLP gRPC :4317 -- use module.tempo.otlp_grpc_endpoint
     mimir_endpoint  = optional(string, "")          # remote_write URL -- use module.mimir.remote_write_endpoint
     mimir_tenant_id = optional(string, "anonymous") # X-Scope-OrgID header -- wire from module.mimir.tenant_id
-    loki_endpoint   = optional(string, "")          # Loki push :3100 -- use module.loki.datasource_url
+    # Second, independent Prometheus remote_write target. Lets metrics dual-write
+    # to two backends at once (e.g. an eval candidate on mimir_endpoint plus a
+    # real Mimir instance here) without one exporter replacing the other.
+    mimir2_endpoint  = optional(string, "")
+    mimir2_tenant_id = optional(string, "anonymous")
+    loki_endpoint    = optional(string, "") # Loki push :3100 -- use module.loki.datasource_url
     # Static scrape targets for an additional `prometheus` receiver
     # (mode = "deployment" only) -- e.g. a kube-state-metrics Service
     # ("kube-state-metrics.monitoring.svc:8080"). Empty list omits the
@@ -27,12 +32,25 @@ variable "otel" {
     # base URL; the otlphttp exporter appends /v1/logs or /v1/traces itself.
     otlphttp_logs_endpoint   = optional(string, "")
     otlphttp_traces_endpoint = optional(string, "")
+    # Resource-attribute allowlist for the gigapipe (otlphttp/logs) path. gigapipe
+    # indexes every resource attr as a label (no metadata tier), so a raw
+    # dual-write indexes far more labels than Loki's index_label_attributes
+    # allowlist. When set (and otlphttp_logs_endpoint != ""), logs to gigapipe run
+    # a separate pipeline that keep_keys()-trims resource attrs to this list, so
+    # gigapipe and Loki index the same labels. [] => off (gigapipe indexes all).
+    # Set this to the SAME list as the Loki module's index_label_attributes.
+    logs_gigapipe_label_allowlist = optional(list(string), [])
     # Wire-compression for the OTLP exporters (otlp/tempo, otlphttp/loki,
     # otlphttp/logs, otlphttp/traces). OTLP defaults to no compression, so on a
     # zone-spread cluster every export leg pays inter-zone egress on raw bytes;
     # gzip/zstd typically shrink telemetry ~5-10x. "none" disables it.
     # prometheusremotewrite is always snappy-compressed (spec) and unaffected.
     otlp_compression = optional(string, "gzip")
+    # Max gRPC receive message size (MiB) for the OTLP gRPC receiver. gRPC's
+    # default is 4 MiB; raise it when producers send batches that exceed 4 MiB
+    # after decompression (the receiver otherwise rejects them with
+    # ResourceExhausted). Only affects the gRPC receiver (:4317).
+    otlp_grpc_max_recv_msg_size_mib = optional(number, 4)
     # Stamp service.namespace on telemetry that lacks it (host/node metrics from
     # the hostmetrics/kubeletstats receivers) via a resource processor with
     # action=insert, so OTel dashboards that filter on service.namespace (e.g.

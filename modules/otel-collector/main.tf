@@ -4,13 +4,23 @@ locals {
     var.otel.otlphttp_traces_endpoint != "" ? "otlphttp/traces" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
+  # When a gigapipe label allowlist is set, the otlphttp/logs (gigapipe) exporter
+  # moves to its own logs/gigapipe pipeline (with the keep_keys trim), so it is
+  # dropped from the main logs pipeline here to avoid a double-write.
+  _logs_split_gigapipe = var.otel.otlphttp_logs_endpoint != "" && length(var.otel.logs_gigapipe_label_allowlist) > 0
   _logs_list = compact([
     var.otel.loki_endpoint != "" ? "otlphttp/loki" : "",
-    var.otel.otlphttp_logs_endpoint != "" ? "otlphttp/logs" : "",
+    (var.otel.otlphttp_logs_endpoint != "" && !local._logs_split_gigapipe) ? "otlphttp/logs" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
+  # OTTL string-list literal for keep_keys, e.g. `"service.name", "k8s.namespace.name"`.
+  # Empty string => feature off (no split pipeline, no processor).
+  gigapipe_label_keep = local._logs_split_gigapipe ? join(", ", [
+    for k in var.otel.logs_gigapipe_label_allowlist : "\"${k}\""
+  ]) : ""
   _metrics_list = compact([
     var.otel.mimir_endpoint != "" ? "prometheusremotewrite" : "",
+    var.otel.mimir2_endpoint != "" ? "prometheusremotewrite/mimir2" : "",
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
 
@@ -79,22 +89,26 @@ resource "helm_release" "otel" {
       image_pull_policy = var.otel.image.pull_policy
 
       # Exporter endpoints
-      tempo_endpoint              = var.otel.tempo_endpoint
-      mimir_endpoint              = var.otel.mimir_endpoint
-      mimir_tenant_id             = var.otel.mimir_tenant_id
-      loki_endpoint               = var.otel.loki_endpoint
-      otlphttp_logs_endpoint      = var.otel.otlphttp_logs_endpoint
-      otlphttp_traces_endpoint    = var.otel.otlphttp_traces_endpoint
-      otlp_compression            = var.otel.otlp_compression
-      service_namespace           = var.otel.service_namespace
-      metrics_collection_interval = var.otel.metrics_collection_interval
-      prometheus_scrape_targets   = var.otel.prometheus_scrape_targets
-      clickhouse_username         = var.otel.clickhouse_username
-      clickhouse_password         = var.otel.clickhouse_password
-      clickhouse_database         = var.otel.clickhouse_database
-      clickhouse_create_schema    = var.otel.clickhouse_create_schema
-      clickhouse_cluster          = var.otel.clickhouse_cluster
-      clickhouse_table_engine     = var.otel.clickhouse_table_engine
+      tempo_endpoint           = var.otel.tempo_endpoint
+      mimir_endpoint           = var.otel.mimir_endpoint
+      mimir_tenant_id          = var.otel.mimir_tenant_id
+      mimir2_endpoint          = var.otel.mimir2_endpoint
+      mimir2_tenant_id         = var.otel.mimir2_tenant_id
+      loki_endpoint            = var.otel.loki_endpoint
+      otlphttp_logs_endpoint   = var.otel.otlphttp_logs_endpoint
+      otlphttp_traces_endpoint = var.otel.otlphttp_traces_endpoint
+      otlp_compression         = var.otel.otlp_compression
+
+      otlp_grpc_max_recv_msg_size_mib = var.otel.otlp_grpc_max_recv_msg_size_mib
+      service_namespace               = var.otel.service_namespace
+      metrics_collection_interval     = var.otel.metrics_collection_interval
+      prometheus_scrape_targets       = var.otel.prometheus_scrape_targets
+      clickhouse_username             = var.otel.clickhouse_username
+      clickhouse_password             = var.otel.clickhouse_password
+      clickhouse_database             = var.otel.clickhouse_database
+      clickhouse_create_schema        = var.otel.clickhouse_create_schema
+      clickhouse_cluster              = var.otel.clickhouse_cluster
+      clickhouse_table_engine         = var.otel.clickhouse_table_engine
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled
@@ -109,6 +123,7 @@ resource "helm_release" "otel" {
       metrics_exporters   = local.metrics_exporters
       logs_exporters      = local.logs_exporters
       logs_receivers      = local.logs_receivers
+      gigapipe_label_keep = local.gigapipe_label_keep
       metrics_receivers   = local.metrics_receivers
       clickhouse_endpoint = var.otel.clickhouse_endpoint
 
