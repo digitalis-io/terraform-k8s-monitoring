@@ -194,6 +194,20 @@ jobs:
       - name: Compliance — grafana-rules contact-point Secret
         run: terraform-compliance -f tests/compliance/features/grafana-rules -p /tmp/plan-grafana-rules.json
 
+      # ── cert-manager ─────────────────────────────────────────────────────
+      - name: Init cert-manager module
+        run: tofu -chdir=modules/cert-manager init -backend=false
+
+      - name: Plan — cert-manager defaults fixture
+        run: |
+          tofu -chdir=modules/cert-manager plan \
+            -var-file=../../tests/compliance/fixtures/cert_manager_defaults.tfvars \
+            -out=plan-cert-manager-defaults.binary
+          tofu -chdir=modules/cert-manager show -json plan-cert-manager-defaults.binary > /tmp/plan-cert-manager-defaults.json
+
+      - name: Compliance — cert-manager defaults
+        run: terraform-compliance -f tests/compliance/features/cert-manager -p /tmp/plan-cert-manager-defaults.json
+
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
     name: terratest
@@ -214,7 +228,7 @@ jobs:
       - name: Seed provider cache
         run: |
           mkdir -p /tmp/tf-plugin-cache
-          for dir in modules/alloy modules/grafana-rules modules/mimir modules/prometheus; do
+          for dir in modules/alloy modules/cert-manager modules/grafana-rules modules/mimir modules/prometheus; do
             tofu -chdir="$dir" init -backend=false
           done
         env:
