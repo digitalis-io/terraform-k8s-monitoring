@@ -40,10 +40,16 @@ resource "kubernetes_config_map" "grafana_rule" {
   }
 }
 
-# Contact points + notification policy in a single ConfigMap.
-# Grafana's alerting provisioning directory supports all resource types in one file.
-resource "kubernetes_config_map" "grafana_contact_points" {
+# Contact points + notification policy in a single Secret.
+# Contact points embed credentials (Slack webhook URL, PagerDuty integration key),
+# so this must be a Secret, not a ConfigMap — ConfigMaps are plaintext and have
+# weaker RBAC. The Grafana alerting sidecar watches both ConfigMaps and Secrets
+# (chart default sidecar.alerts.resource = "both") for the grafana_alert label,
+# so provisioning is unaffected.
+resource "kubernetes_secret" "grafana_contact_points" {
   count = local.has_contact_points ? 1 : 0
+
+  type = "Opaque"
 
   metadata {
     name      = "grafana-contact-points"

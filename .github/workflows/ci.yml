@@ -146,6 +146,20 @@ jobs:
       - name: Compliance — sensitive-data disabled
         run: terraform-compliance -f tests/compliance/features -p /tmp/plan-sensitive-data-disabled.json
 
+      # ── grafana-rules ────────────────────────────────────────────────────
+      - name: Init grafana-rules module
+        run: tofu -chdir=modules/grafana-rules init -backend=false
+
+      - name: Plan — grafana-rules slack fixture
+        run: |
+          tofu -chdir=modules/grafana-rules plan \
+            -var-file=../../tests/compliance/fixtures/grafana_rules_slack.tfvars \
+            -out=plan-grafana-rules.binary
+          tofu -chdir=modules/grafana-rules show -json plan-grafana-rules.binary > /tmp/plan-grafana-rules.json
+
+      - name: Compliance — grafana-rules contact-point Secret
+        run: terraform-compliance -f tests/compliance/features/grafana-rules -p /tmp/plan-grafana-rules.json
+
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
     name: terratest
@@ -166,7 +180,7 @@ jobs:
       - name: Seed provider cache
         run: |
           mkdir -p /tmp/tf-plugin-cache
-          for dir in modules/alloy modules/mimir modules/prometheus; do
+          for dir in modules/alloy modules/grafana-rules modules/mimir modules/prometheus; do
             tofu -chdir="$dir" init -backend=false
           done
         env:
