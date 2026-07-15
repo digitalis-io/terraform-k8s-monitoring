@@ -44,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `modules/prometheus`: `grafana_plugins` variable to control which Grafana plugins are installed. Defaults include common community plugins; ClickHouse datasource plugin included.
 - `modules/tempo`: `metrics_generator_remote_write_url` variable to enable the Tempo metrics generator for `rate()` and span metrics. Set to the Mimir remote-write URL to activate; empty string disables the generator (default).
 
+### Fixed
+
+- `modules/prometheus`: `grafana_database` null-safety on OpenTofu < 1.11 / Terraform. Older engines eagerly evaluate both sides of `&&`/`||`, so the `grafana_database == null || …` and `grafana_database != null && …` guards still errored with "Attempt to get attribute from null value" whenever `grafana_database` was unset (the default). The five variable validations and the `grafana_db_create_secret` local are now wrapped in `try(…)`, so a plan with the default (no external DB) succeeds on OpenTofu 1.9.x.
+
 ### Changed
 
 - `modules/otel-collector`: Chart version updated from `0.150.0` to `0.158.2`.
