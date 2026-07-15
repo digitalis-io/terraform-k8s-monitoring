@@ -1,6 +1,6 @@
 output "namespace" {
   description = "Kubernetes namespace where Mimir is deployed."
-  value       = kubernetes_namespace.mimir.metadata[0].name
+  value       = var.mimir.namespace
 }
 
 output "remote_write_endpoint" {

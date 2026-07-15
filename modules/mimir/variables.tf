@@ -3,6 +3,7 @@ variable "mimir" {
   type = object({
     chart_version         = optional(string, "5.6.0")
     namespace             = optional(string, "monitoring")
+    create_namespace      = optional(bool, true)
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
     ingress_enabled       = optional(bool, false)

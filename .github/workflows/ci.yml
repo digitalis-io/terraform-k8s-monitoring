@@ -208,6 +208,20 @@ jobs:
       - name: Compliance — cert-manager defaults
         run: terraform-compliance -f tests/compliance/features/cert-manager -p /tmp/plan-cert-manager-defaults.json
 
+      # ── Mimir ────────────────────────────────────────────────────────────
+      - name: Init mimir module
+        run: tofu -chdir=modules/mimir init -backend=false
+
+      - name: Plan — mimir defaults fixture
+        run: |
+          tofu -chdir=modules/mimir plan \
+            -var-file=../../tests/compliance/fixtures/mimir_defaults.tfvars \
+            -out=plan-mimir-defaults.binary
+          tofu -chdir=modules/mimir show -json plan-mimir-defaults.binary > /tmp/plan-mimir-defaults.json
+
+      - name: Compliance — mimir defaults
+        run: terraform-compliance -f tests/compliance/features/mimir -p /tmp/plan-mimir-defaults.json
+
   # ── Terratest (Go unit tests — no cluster required) ─────────────────────────
   terratest:
     name: terratest
@@ -228,7 +242,7 @@ jobs:
       - name: Seed provider cache
         run: |
           mkdir -p /tmp/tf-plugin-cache
-          for dir in modules/alloy modules/cert-manager modules/grafana-rules modules/mimir modules/prometheus; do
+          for dir in modules/alloy modules/cert-manager modules/grafana-rules modules/loki modules/mimir modules/prometheus; do
             tofu -chdir="$dir" init -backend=false
           done
         env:

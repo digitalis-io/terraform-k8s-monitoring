@@ -40,6 +40,8 @@ resource "kubernetes_secret" "mimir_s3_credentials" {
 }
 
 resource "kubernetes_namespace" "mimir" {
+  count = var.mimir.create_namespace ? 1 : 0
+
   metadata {
     name = var.mimir.namespace
 
@@ -58,7 +60,7 @@ resource "helm_release" "mimir" {
   repository = "https://grafana.github.io/helm-charts"
   chart      = "mimir-distributed"
   version    = var.mimir.chart_version
-  namespace  = kubernetes_namespace.mimir.metadata[0].name
+  namespace  = var.mimir.namespace
 
   create_namespace = false
   wait             = true
