@@ -1,7 +1,7 @@
 variable "mimir" {
   description = "Grafana Mimir configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "5.6.0")
+    chart_version         = optional(string, "6.1.0")
     namespace             = optional(string, "monitoring")
     create_namespace      = optional(bool, true)
     namespace_labels      = optional(map(string), {})

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `modules/loki`: `chart_repository` variable (default `https://grafana.github.io/helm-charts`) to override the Helm repo the Loki chart is pulled from. The OSS chart moved to the `grafana-community` fork (Loki ≥ 3.7 is only published there); point `chart_repository` at the fork and set a community `chart_version` (e.g. `18.5.0` = Loki 3.7.3) to run a newer Loki.
 - All modules: `wait`, `wait_for_jobs`, and `timeout` are now configurable on every `helm_release` (defaults unchanged — `true`/`true`/`300` for cert-manager and the otel operator, `600` elsewhere). Set `wait = false` for async/GitOps rollouts. `otel-collector` exposes them for both the collector and operator releases. Closes [#33](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/33).
 - `modules/otel-collector`: `clickhouse_credentials_secret` variable — reference (or auto-create) a Kubernetes Secret and inject the ClickHouse username/password via `secretKeyRef` + `${env:...}` expansion instead of rendering them plaintext into the Helm values. Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
 - `modules/prometheus`: `clickhouse_datasource.password_secret` — reference (or auto-create) a Kubernetes Secret and inject the ClickHouse Grafana-datasource password via `$__env{}` instead of plaintext `secureJsonData`. Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
@@ -67,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- All modules: default Helm chart versions bumped to latest — `loki` `6.6.0`→`7.1.0`, `mimir-distributed` `5.6.0`→`6.1.0`, `alloy` `0.12.5`→`1.10.1`, `cert-manager` `v1.19.1`→`v1.21.0`, `tempo-distributed` `1.40.0`→`1.61.3`, `pyroscope` `1.20.3`→`2.1.1`, `opentelemetry-collector` `0.158.2`→`0.165.0`, `opentelemetry-operator` `0.116.0`→`0.120.0`, `kube-prometheus-stack` `86.3.2`→`87.16.1`. The loki, mimir, alloy, and pyroscope bumps cross a major chart version — review each chart's upgrade notes before applying.
 - `modules/mimir`: `versions.tf` `required_version` relaxed from `>= 1.9, < 2.0` to `>= 1.3.0` to match the other modules (no ≥1.9 feature was in use).
 - `modules/tempo`: **removed** the dead `deployment_mode` variable — it was validated but never referenced (replica counts follow `replicas`). Passing it now errors; drop it from your config.
 - `modules/pyroscope`: **removed** the dead `storage.s3_path_style` variable — it was documented but never wired into the Helm values. Drop it from your config.

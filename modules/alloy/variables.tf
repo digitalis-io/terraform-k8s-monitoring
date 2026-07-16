@@ -2,7 +2,7 @@ variable "alloy" {
   description = "Grafana Alloy configuration. All fields are optional with safe defaults."
   type = object({
     # Chart version from https://artifacthub.io/packages/helm/grafana/alloy
-    chart_version         = optional(string, "0.12.5")
+    chart_version         = optional(string, "1.10.1")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

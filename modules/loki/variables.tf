@@ -1,7 +1,12 @@
 variable "loki" {
   description = "Grafana Loki configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "6.6.0")
+    chart_version = optional(string, "7.1.0")
+    # Helm repo for the loki chart. The OSS chart moved to the grafana-community
+    # fork (2026-03, forked at chart 6.55.0); Loki >= 3.7 is ONLY published there
+    # (grafana.github.io/helm-charts tops out at 3.6.x). Point here + set a
+    # community chart_version (e.g. 18.5.0 = Loki 3.7.3) to run a newer Loki.
+    chart_repository      = optional(string, "https://grafana.github.io/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

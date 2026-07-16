@@ -55,7 +55,7 @@ resource "kubernetes_namespace" "loki" {
 
 resource "helm_release" "loki" {
   name       = "loki"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.loki.chart_repository
   chart      = "loki"
   version    = var.loki.chart_version
   namespace  = var.loki.namespace

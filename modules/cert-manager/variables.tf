@@ -1,7 +1,7 @@
 variable "cert_manager" {
   description = "cert-manager configuration."
   type = object({
-    chart_version         = optional(string, "v1.19.1")
+    chart_version         = optional(string, "v1.21.0")
     namespace             = optional(string, "cert-manager")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

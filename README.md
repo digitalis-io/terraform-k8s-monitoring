@@ -164,7 +164,7 @@ module "cert_manager" {
   source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/cert-manager"
 
   cert_manager = {
-    chart_version       = "v1.19.1"
+    chart_version       = "v1.21.0"
     namespace           = "cert-manager"
     create_namespace    = true
     cluster_issuer_name = "selfsigned-cluster-issuer"
@@ -174,7 +174,7 @@ module "cert_manager" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"v1.19.1"` | cert-manager Helm chart version |
+| `chart_version` | `"v1.21.0"` | cert-manager Helm chart version |
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
@@ -204,7 +204,7 @@ module "mimir" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"5.6.0"` | Mimir distributed Helm chart version |
+| `chart_version` | `"6.1.0"` | Mimir distributed Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `retention_period` | `"30d"` | How long to keep metrics |
 | `tenant_id` | `"anonymous"` | Value sent in `X-Scope-OrgID` header by Prometheus and Grafana |
@@ -255,7 +255,7 @@ module "prometheus" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"86.3.2"` | kube-prometheus-stack Helm chart version |
+| `chart_version` | `"87.16.1"` | kube-prometheus-stack Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -350,7 +350,8 @@ module "loki" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"6.6.0"` | Loki Helm chart version |
+| `chart_version` | `"7.1.0"` | Loki Helm chart version |
+| `chart_repository` | `"https://grafana.github.io/helm-charts"` | Helm repo for the Loki chart. Point at the `grafana-community` fork (with a community `chart_version`) to run Loki ≥ 3.7 |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `deployment_mode` | `"single-binary"` | `single-binary` or `scalable` |
@@ -391,7 +392,7 @@ module "tempo" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.40.0"` | Tempo Helm chart version |
+| `chart_version` | `"1.61.3"` | Tempo Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -441,7 +442,7 @@ module "otel" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"0.158.2"` | OpenTelemetry Collector Helm chart version |
+| `chart_version` | `"0.165.0"` | OpenTelemetry Collector Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -471,7 +472,7 @@ module "otel" {
 | `image.tag` | `""` | Image tag (empty = chart appVersion) |
 | `image.pull_policy` | `"IfNotPresent"` | Image pull policy |
 | `operator.enabled` | `false` | Deploy the OpenTelemetry Operator for auto-instrumentation |
-| `operator.chart_version` | `"0.116.0"` | Operator Helm chart version |
+| `operator.chart_version` | `"0.120.0"` | Operator Helm chart version |
 | `operator.collector_image_repository` | `"otel/opentelemetry-collector-k8s"` | Operator's default collector image repository |
 | `operator.cert_manager_enabled` | `false` | Use cert-manager for webhook certificates |
 | `operator.auto_generate_cert_enabled` | `true` | Auto-generate webhook certificates (incompatible with cert-manager) |
@@ -517,7 +518,7 @@ module "alloy" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"0.12.5"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `chart_version` | `"1.10.1"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -656,7 +657,7 @@ module "pyroscope" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.20.3"` | Pyroscope Helm chart version |
+| `chart_version` | `"2.1.1"` | Pyroscope Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -1348,7 +1349,7 @@ module "otel" {
 
     operator = {
       enabled           = true
-      chart_version     = "0.116.0"
+      chart_version     = "0.120.0"
       cert_manager_enabled = false  # auto-generate webhook certs by default
       # Enable Go eBPF instrumentation (requires Linux kernel >=4.19)
       go_instrumentation_enabled = true

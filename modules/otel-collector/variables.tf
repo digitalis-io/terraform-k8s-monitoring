@@ -1,7 +1,7 @@
 variable "otel" {
   description = "OpenTelemetry Collector configuration. All fields are optional with safe defaults."
   type = object({
-    chart_version         = optional(string, "0.158.2")
+    chart_version         = optional(string, "0.165.0")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
@@ -162,7 +162,7 @@ variable "otel" {
 
     operator = optional(object({
       enabled                    = optional(bool, false)
-      chart_version              = optional(string, "0.116.0")
+      chart_version              = optional(string, "0.120.0")
       collector_image_repository = optional(string, "otel/opentelemetry-collector-k8s")
       cert_manager_enabled       = optional(bool, false)
       auto_generate_cert_enabled = optional(bool, true)

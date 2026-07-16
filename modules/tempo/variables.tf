@@ -1,7 +1,7 @@
 variable "tempo" {
   description = "Grafana Tempo configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "1.40.0")
+    chart_version         = optional(string, "1.61.3")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

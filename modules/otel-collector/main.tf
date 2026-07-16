@@ -215,7 +215,7 @@ resource "helm_release" "otel_operator" {
   name       = "otel-operator"
   repository = "https://open-telemetry.github.io/opentelemetry-helm-charts"
   chart      = "opentelemetry-operator"
-  version    = try(var.otel.operator.chart_version, "0.116.0")
+  version    = try(var.otel.operator.chart_version, "0.120.0")
   namespace  = var.otel.namespace
 
   create_namespace = false

@@ -1,7 +1,7 @@
 variable "pyroscope" {
   description = "Grafana Pyroscope configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "1.20.3")
+    chart_version         = optional(string, "2.1.1")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

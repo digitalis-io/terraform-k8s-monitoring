@@ -300,6 +300,21 @@ config:
           value: "$${env:KUBE_NODE_NAME}"
           action: upsert
 %{ endif ~}
+    # Drop unbounded process.* resource attributes before remote-write. Both the
+    # hostmetrics `process` scraper AND app SDKs (the Go OTel process resource
+    # detector) stamp process.command_line -- the full container command line --
+    # which resource_to_telemetry_conversion would promote to a
+    # `process_command_line` label exceeding Mimir's 2048-char limit, failing the
+    # entire remote-write request (err-mimir-label-value-too-long, 400). Also drop
+    # executable.path / command (long, high-cardinality). Applied on metrics only.
+    resource/strip_process:
+      attributes:
+        - key: process.command_line
+          action: delete
+        - key: process.executable.path
+          action: delete
+        - key: process.command
+          action: delete
 %{ if gigapipe_label_keep != "" ~}
     # gigapipe/qryn promotes EVERY OTLP resource attribute to an indexed label
     # (its time_series/fingerprint model has no structured-metadata tier like
@@ -478,7 +493,7 @@ config:
       # (enrichment already happened on the producer), write the backends.
       metrics:
         receivers: [kafka/metrics]
-        processors: [memory_limiter, batch]
+        processors: [memory_limiter, resource/strip_process, batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: [kafka/logs]
@@ -495,7 +510,7 @@ config:
         exporters: ${traces_exporters}
       metrics:
         receivers: ${metrics_receivers}
-        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}%{ if mode == "daemonset" ~}resource/hostname, %{ endif ~}batch]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}%{ if mode == "daemonset" ~}resource/hostname, %{ endif ~}resource/strip_process, batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: ${logs_receivers}
