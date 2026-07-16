@@ -62,19 +62,27 @@ grafana:
 %{ if grafana_database != null ~}
   grafana.ini:
     database:
-      type: ${grafana_database.type}
-      host: ${grafana_database.host}
-      name: ${grafana_database.name}
-      user: ${grafana_database.user}
+      type: "${grafana_database.type}"
+      host: "${grafana_database.host}"
+      name: "${grafana_database.name}"
+      user: "${grafana_database.user}"
 %{ if grafana_database.type == "postgres" && grafana_database.ssl_mode != "" ~}
-      ssl_mode: ${grafana_database.ssl_mode}
+      ssl_mode: "${grafana_database.ssl_mode}"
 %{ endif ~}
-%{ if grafana_db_secret != null ~}
+%{ endif ~}
+%{ if grafana_db_secret != null || clickhouse_ds_secret != null ~}
   envValueFrom:
+%{ if grafana_db_secret != null ~}
     GF_DATABASE_PASSWORD:
       secretKeyRef:
         name: ${grafana_db_secret.name}
         key: ${grafana_db_secret.field}
+%{ endif ~}
+%{ if clickhouse_ds_secret != null ~}
+    CLICKHOUSE_DS_PASSWORD:
+      secretKeyRef:
+        name: ${clickhouse_ds_secret.name}
+        key: ${clickhouse_ds_secret.field}
 %{ endif ~}
 %{ endif ~}
   sidecar:
@@ -193,19 +201,25 @@ grafana:
       access: proxy
       isDefault: false
       jsonData:
-        defaultDatabase: ${clickhouse_datasource.database}
-        server: ${clickhouse_datasource.host}
+        defaultDatabase: "${clickhouse_datasource.database}"
+        server: "${clickhouse_datasource.host}"
         port: ${clickhouse_datasource.port}
-        username: ${clickhouse_datasource.username}
+        username: "${clickhouse_datasource.username}"
         secure: ${clickhouse_datasource.secure}
         logs:
           otelEnabled: ${clickhouse_datasource.logs_otel_enabled}
-          defaultTable: ${clickhouse_datasource.logs_default_table}
+          defaultTable: "${clickhouse_datasource.logs_default_table}"
         traces:
           otelEnabled: ${clickhouse_datasource.traces_otel_enabled}
-          defaultTable: ${clickhouse_datasource.traces_default_table}
+          defaultTable: "${clickhouse_datasource.traces_default_table}"
       secureJsonData:
+%{ if clickhouse_ds_secret != null ~}
+        # Password sourced at runtime from a Kubernetes Secret via Grafana's
+        # $__env{} expansion — never rendered into the Helm values / state.
+        password: "$__env{CLICKHOUSE_DS_PASSWORD}"
+%{ else ~}
         password: "${clickhouse_datasource.password}"
+%{ endif ~}
 %{ endif ~}
 %{ if length(grafana_dashboard_imports) > 0 ~}
   dashboardProviders:

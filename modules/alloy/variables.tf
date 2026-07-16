@@ -8,6 +8,11 @@ variable "alloy" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
 
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
+
     # Helm release name. Override when deploying more than one Alloy-based
     # release into the same namespace (e.g. a daemonset collector alongside a
     # deployment-mode gateway) so they don't collide.

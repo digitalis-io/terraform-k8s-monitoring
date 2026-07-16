@@ -6,8 +6,13 @@ variable "prometheus" {
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
-    grafana_enabled       = optional(bool, true)
-    alertmanager_enabled  = optional(bool, true)
+    # Helm release readiness. wait/wait_for_jobs block apply until resources are
+    # ready; set wait = false for async/GitOps rollouts.
+    wait                 = optional(bool, true)
+    wait_for_jobs        = optional(bool, true)
+    timeout              = optional(number, 600)
+    grafana_enabled      = optional(bool, true)
+    alertmanager_enabled = optional(bool, true)
 
     # Number of Grafana replicas. Values > 1 require grafana_database (external
     # PostgreSQL/MySQL) — the default SQLite backend cannot be shared across pods.
@@ -111,8 +116,17 @@ variable "prometheus" {
       port     = optional(number, 9000)
       database = optional(string, "observability")
       username = optional(string, "default")
+      # Supply the password one of two ways (mutually exclusive):
+      #   * password        — plaintext; the module creates a Secret from it.
+      #   * password_secret — reference an existing Secret (never commit plaintext).
+      # Either way it is injected via Grafana's $__env{} expansion, never rendered
+      # into secureJsonData in the Helm values. Neither set = no password.
       password = optional(string, "")
-      secure   = optional(bool, false)
+      password_secret = optional(object({
+        name  = string
+        field = optional(string, "password")
+      }), null)
+      secure = optional(bool, false)
 
       # OTel schema — matches tables created by the otel-collector ClickHouse exporter
       logs_otel_enabled    = optional(bool, true)
@@ -203,6 +217,15 @@ variable "prometheus" {
       true
     )
     error_message = "grafana_database: set at most one of password or password_secret, not both."
+  }
+
+  validation {
+    condition = try(
+      var.prometheus.clickhouse_datasource == null ||
+      !(var.prometheus.clickhouse_datasource.password != "" && var.prometheus.clickhouse_datasource.password_secret != null),
+      true
+    )
+    error_message = "clickhouse_datasource: set at most one of password or password_secret, not both."
   }
 
   validation {

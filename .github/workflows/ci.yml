@@ -47,6 +47,22 @@ jobs:
             tflint --chdir="$dir"
           done
 
+  # ── Security scan (Trivy IaC/config) ────────────────────────────────────────
+  trivy:
+    name: trivy config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy config scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: modules
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          hide-progress: true
+
   # ── Validate (OpenTofu) ─────────────────────────────────────────────────────
   validate:
     name: tofu validate

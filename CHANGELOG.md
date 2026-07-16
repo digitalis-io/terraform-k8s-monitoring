@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- All modules: `wait`, `wait_for_jobs`, and `timeout` are now configurable on every `helm_release` (defaults unchanged — `true`/`true`/`300` for cert-manager and the otel operator, `600` elsewhere). Set `wait = false` for async/GitOps rollouts. `otel-collector` exposes them for both the collector and operator releases. Closes [#33](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/33).
+- `modules/otel-collector`: `clickhouse_credentials_secret` variable — reference (or auto-create) a Kubernetes Secret and inject the ClickHouse username/password via `secretKeyRef` + `${env:...}` expansion instead of rendering them plaintext into the Helm values. Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
+- `modules/prometheus`: `clickhouse_datasource.password_secret` — reference (or auto-create) a Kubernetes Secret and inject the ClickHouse Grafana-datasource password via `$__env{}` instead of plaintext `secureJsonData`. Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
+- `modules/tempo`: `tenant_id` variable — sets `X-Scope-OrgID` on the metrics-generator remote-write so it works when Mimir's tenant is not `anonymous`.
+- `modules/grafana-rules`, `modules/prometheus-rules`: `outputs.tf` (namespace, provisioned rule/secret names, applied-config flags).
+- S3 credential mutual-exclusivity validation on `loki`/`tempo`/`pyroscope`/`mimir` (`s3_credentials_secret` vs `s3_access_key`/`s3_secret_key`) and ClickHouse credential mutual-exclusivity on `otel-collector`/`prometheus`.
+- Per-module `README.md` for all ten modules (branded header + terraform-docs reference tables).
+- CI: `trivy config` security-scan job (`HIGH,CRITICAL`, `exit-code 1`) over `modules/`.
 - `examples/gcp/mimir-gcs`: new example — a metrics-only slice deploying Grafana Mimir with a GCS backend (Workload Identity, keyless) plus a Grafana-only kube-prometheus-stack install, with ingress TLS issued by cert-manager via ACME/Let's Encrypt. External Prometheus/OTel remote-writes into Mimir; no local Prometheus, Loki, or Tempo.
 - `modules/mimir`: `create_namespace` variable (default `true`) — set to `false` to deploy Mimir into a namespace managed elsewhere (bring-your-own-namespace), matching the existing behaviour of `modules/loki`. Previously the module always created its namespace, so `apply` failed when the namespace already existed. Fixes [#24](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/24).
 - `modules/mimir`: `storage.gcs_blocks_prefix`, `storage.gcs_ruler_prefix`, and `storage.gcs_alertmanager_prefix` variables — object key prefixes (rendered as `storage_prefix`) for the blocks/ruler/alertmanager GCS backends, letting Mimir share one GCS bucket across components (each storage type needs a distinct bucket+prefix combo). Empty (default) omits the prefix.
@@ -49,11 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `modules/grafana-rules`: per-channel `min_severity` routing was non-functional — all channels shared one `default-receiver` contact point, so any matched route fired every enabled channel. Each channel now gets its own contact point targeted by its own notification-policy route; unmatched alerts fall through to an empty root receiver. Closes [#31](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/31).
+- `modules/prometheus-rules`: the top-level Alertmanager route no longer falls back to a real receiver (`slack`/`pagerduty`) — it always routes to the built-in `null` receiver, so alerts below a receiver's `min_severity` are dropped instead of leaking through the catch-all default. Closes [#32](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/32).
+- `modules/mimir`: `storage.gcs_service_account_key` was declared but never passed to the Helm values, so an explicit GCS key was silently ignored. It is now wired through (rendered only when non-empty; empty still uses Workload Identity). Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
+- `modules/cert-manager`, `modules/prometheus-rules`: added `when = destroy` provisioners so the ClusterIssuer, PrometheusRules, and AlertmanagerConfig are removed on `destroy` instead of being orphaned on the cluster.
+- Quoted previously-unquoted YAML interpolations (Grafana external-DB `host`/`name`/`user`, ClickHouse endpoint/username/database, grafana-rules Slack/webhook/email fields) so values containing YAML-significant characters can't corrupt the document.
 - `README.md`: examples table now lists `examples/s3compatible/` (previously undocumented) and the new `examples/gcp/mimir-gcs/`, and labels `examples/gcp/` as the full-stack variant.
 - `modules/prometheus`: `grafana_database` null-safety on OpenTofu < 1.11 / Terraform. Older engines eagerly evaluate both sides of `&&`/`||`, so the `grafana_database == null || …` and `grafana_database != null && …` guards still errored with "Attempt to get attribute from null value" whenever `grafana_database` was unset (the default). The five variable validations and the `grafana_db_create_secret` local are now wrapped in `try(…)`, so a plan with the default (no external DB) succeeds on OpenTofu 1.9.x.
 
 ### Changed
 
+- `modules/mimir`: `versions.tf` `required_version` relaxed from `>= 1.9, < 2.0` to `>= 1.3.0` to match the other modules (no ≥1.9 feature was in use).
+- `modules/tempo`: **removed** the dead `deployment_mode` variable — it was validated but never referenced (replica counts follow `replicas`). Passing it now errors; drop it from your config.
+- `modules/pyroscope`: **removed** the dead `storage.s3_path_style` variable — it was documented but never wired into the Helm values. Drop it from your config.
+- `modules/alloy`: the rendered Helm values `templatefile` is now wrapped in `sensitive()` (matching `prometheus`/`otel-collector`) so caller credentials in `alloy_config`/`extra_values` don't leak into plan output.
+- `modules/cert-manager`: dropped a no-op single-argument `merge()` around the Helm values.
+- `modules/mimir`: the S3 credentials Secret name now references its local instead of a duplicated string literal.
 - `modules/cert-manager`: the ClusterIssuer `terraform_data` now re-applies when the issuer type/config **or** name changes (previously only a chart-id change re-triggered it), and `cluster_issuer_name` is validated as an RFC 1123 DNS subdomain. The manifest is built with `yamlencode` rather than string interpolation, removing a YAML/shell-injection surface via the issuer name.
 - `modules/otel-collector`: Chart version updated from `0.150.0` to `0.158.2`.
 - `modules/otel-collector`: Default resource requests increased from `100m CPU / 128Mi` to `300m CPU / 256Mi` to support hostmetrics collection alongside traces and logs.
@@ -66,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- `modules/otel-collector` and `modules/prometheus`: ClickHouse credentials can now be kept out of the Helm values and Terraform state by injecting them from a Kubernetes Secret (`clickhouse_credentials_secret` / `clickhouse_datasource.password_secret`) rather than rendering them plaintext. Extending the same Secret-injection pattern to the GCS/Azure storage backends (which still render service-account JSON / account keys inline) is tracked in [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30) as it needs live-cluster verification.
 - `modules/grafana-rules`: contact points (which embed the Slack webhook URL and PagerDuty integration key) are now provisioned as a Kubernetes **Secret** instead of a ConfigMap. ConfigMaps are stored in plaintext and have weaker RBAC than Secrets; the Grafana alerting sidecar watches both resource types (chart default `sidecar.alerts.resource = "both"`), so provisioning is unaffected.
 - `modules/prometheus-rules`: the Slack webhook URL and PagerDuty routing key are no longer stored raw in the AlertmanagerConfig `terraform_data.triggers_replace` (a non-sensitive attribute that echoed them in plan output). They are hashed with `sha256` — the config still re-applies when a credential changes. The credentials themselves continue to live only in Kubernetes Secrets.
 

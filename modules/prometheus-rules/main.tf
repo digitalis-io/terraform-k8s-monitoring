@@ -19,7 +19,12 @@ locals {
     "info"     = "critical|warning|info"
   }
 
-  default_receiver = var.prometheus_rules.slack.enabled ? "slack" : (var.prometheus_rules.pagerduty.enabled ? "pagerduty" : "null")
+  # The top-level route always falls back to Alertmanager's built-in "null"
+  # receiver, which silently drops alerts. Delivery happens solely via the
+  # explicit per-severity child routes below, so an alert that doesn't clear a
+  # receiver's min_severity is dropped rather than leaking through a catch-all
+  # default (which previously defeated the configured threshold). See #32.
+  default_receiver = "null"
 }
 
 # Apply each PrometheusRule manifest via kubectl after the Helm release completes.
@@ -27,15 +32,30 @@ locals {
 resource "terraform_data" "prometheus_rule" {
   for_each = local.all_rules
 
-  triggers_replace = [
-    var.prometheus_rules.prometheus_release_id,
-    sha256(each.value),
-  ]
+  # Stored as a map (not a list) so the destroy-time provisioner below can read
+  # the namespace/kubeconfig/manifest via self.triggers_replace — destroy-time
+  # provisioners cannot reference var.*.
+  triggers_replace = {
+    release_id      = var.prometheus_rules.prometheus_release_id
+    manifest        = each.value
+    namespace       = var.prometheus_rules.namespace
+    kubeconfig_path = var.prometheus_rules.kubeconfig_path
+  }
 
   provisioner "local-exec" {
     command = <<-EOT
       ${var.prometheus_rules.kubeconfig_path != "" ? "kubectl --kubeconfig=${var.prometheus_rules.kubeconfig_path}" : "kubectl"} apply -n ${var.prometheus_rules.namespace} -f - <<'YAML'
 ${each.value}
+YAML
+    EOT
+  }
+
+  # Remove the PrometheusRule on destroy so it isn't orphaned on the cluster.
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      ${self.triggers_replace.kubeconfig_path != "" ? "kubectl --kubeconfig=${self.triggers_replace.kubeconfig_path}" : "kubectl"} delete -n ${self.triggers_replace.namespace} --ignore-not-found=true -f - <<'YAML'
+${self.triggers_replace.manifest}
 YAML
     EOT
   }
@@ -46,20 +66,23 @@ YAML
 resource "terraform_data" "alertmanager_config" {
   count = local.has_receivers ? 1 : 0
 
-  triggers_replace = [
-    var.prometheus_rules.prometheus_release_id,
-    var.prometheus_rules.slack.enabled,
-    # Hash the credentials rather than storing them raw — triggers_replace is a
-    # plain (non-sensitive) attribute and would otherwise echo the Slack webhook
-    # URL / PagerDuty routing key in plan output. The hash still changes when the
-    # credential changes, so the config is re-applied.
-    sha256(var.prometheus_rules.slack.webhook_url),
-    var.prometheus_rules.slack.channel,
-    var.prometheus_rules.slack.min_severity,
-    var.prometheus_rules.pagerduty.enabled,
-    sha256(var.prometheus_rules.pagerduty.routing_key),
-    var.prometheus_rules.pagerduty.min_severity,
-  ]
+  # Map (not list) so the destroy-time provisioner can read namespace/kubeconfig
+  # via self.triggers_replace. Credentials are hashed rather than stored raw —
+  # triggers_replace is a plain (non-sensitive) attribute and would otherwise
+  # echo the Slack webhook URL / PagerDuty routing key in plan output. The hash
+  # still changes when the credential changes, so the config is re-applied.
+  triggers_replace = {
+    release_id         = var.prometheus_rules.prometheus_release_id
+    slack_enabled      = var.prometheus_rules.slack.enabled
+    slack_webhook_hash = sha256(var.prometheus_rules.slack.webhook_url)
+    slack_channel      = var.prometheus_rules.slack.channel
+    slack_severity     = var.prometheus_rules.slack.min_severity
+    pagerduty_enabled  = var.prometheus_rules.pagerduty.enabled
+    pagerduty_key_hash = sha256(var.prometheus_rules.pagerduty.routing_key)
+    pagerduty_severity = var.prometheus_rules.pagerduty.min_severity
+    namespace          = var.prometheus_rules.namespace
+    kubeconfig_path    = var.prometheus_rules.kubeconfig_path
+  }
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -76,6 +99,12 @@ ${templatefile("${path.module}/templates/alertmanager-config.yaml.tftpl", {
 })}
 YAML
     EOT
+}
+
+# Remove the AlertmanagerConfig (kind/name fixed as "receivers") on destroy.
+provisioner "local-exec" {
+  when    = destroy
+  command = "${self.triggers_replace.kubeconfig_path != "" ? "kubectl --kubeconfig=${self.triggers_replace.kubeconfig_path}" : "kubectl"} delete alertmanagerconfig receivers -n ${self.triggers_replace.namespace} --ignore-not-found=true"
 }
 
 # The AlertmanagerConfig references the Slack/PagerDuty Secrets by name, so they

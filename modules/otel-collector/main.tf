@@ -24,9 +24,18 @@ locals {
     var.otel.clickhouse_endpoint != "" ? "clickhouse" : "",
   ])
 
-  traces_exporters  = length(local._traces_list) > 0 ? "[${join(", ", local._traces_list)}]" : "[debug]"
-  metrics_exporters = length(local._metrics_list) > 0 ? "[${join(", ", local._metrics_list)}]" : "[debug]"
-  logs_exporters    = length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]"
+  # Kafka buffering role. Only active when brokers is set. producer -> the signal
+  # pipeline exporters become the kafka exporters (defined in the template);
+  # consumer -> template swaps the pipeline receivers to kafka and keeps the
+  # backend exporters computed below.
+  kafka_role      = var.otel.kafka.brokers != "" ? var.otel.kafka.role : ""
+  _kafka_producer = local.kafka_role == "producer"
+  # YAML list body for `brokers: [${kafka_brokers}]`, one quoted host:port each.
+  kafka_brokers_yaml = join(", ", [for b in split(",", var.otel.kafka.brokers) : "\"${trimspace(b)}\""])
+
+  traces_exporters  = local._kafka_producer ? "[kafka/traces]" : (length(local._traces_list) > 0 ? "[${join(", ", local._traces_list)}]" : "[debug]")
+  metrics_exporters = local._kafka_producer ? "[kafka/metrics]" : (length(local._metrics_list) > 0 ? "[${join(", ", local._metrics_list)}]" : "[debug]")
+  logs_exporters    = local._kafka_producer ? "[kafka/logs]" : (length(local._logs_list) > 0 ? "[${join(", ", local._logs_list)}]" : "[debug]")
   logs_receivers    = var.otel.mode == "daemonset" ? "[otlp, filelog]" : "[otlp]"
   # daemonset: node OS metrics (hostmetrics) + per-node kubelet pod/container
   # metrics (kubeletstats). deployment: cluster-singleton object-state metrics
@@ -49,6 +58,46 @@ locals {
       t.value != "" ? { value = t.value } : {},
     )
   ]
+
+  # ClickHouse credentials: prefer a caller-supplied Secret; otherwise, when a
+  # plaintext password is given, auto-create a Secret so the credential is
+  # injected via secretKeyRef + $${env:...} expansion rather than rendered into
+  # the Helm values / Terraform state.
+  otel_create_clickhouse_secret = (
+    var.otel.clickhouse_endpoint != "" &&
+    var.otel.clickhouse_credentials_secret == null &&
+    var.otel.clickhouse_password != ""
+  )
+  otel_clickhouse_secret = (
+    var.otel.clickhouse_credentials_secret != null ? var.otel.clickhouse_credentials_secret :
+    local.otel_create_clickhouse_secret ? {
+      name         = "${var.otel.release_name}-clickhouse-credentials"
+      username_key = "username"
+      password_key = "password"
+    } : null
+  )
+}
+
+resource "kubernetes_secret" "otel_clickhouse_credentials" {
+  count = local.otel_create_clickhouse_secret ? 1 : 0
+
+  metadata {
+    name      = "${var.otel.release_name}-clickhouse-credentials"
+    namespace = var.otel.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    username = var.otel.clickhouse_username
+    password = var.otel.clickhouse_password
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.otel]
 }
 
 resource "kubernetes_namespace" "otel" {
@@ -75,9 +124,9 @@ resource "helm_release" "otel" {
   namespace  = var.otel.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.otel.wait
+  wait_for_jobs    = var.otel.wait_for_jobs
+  timeout          = var.otel.timeout
 
   values = [
     sensitive(templatefile("${path.module}/helm-values/otel-collector.yaml.tftpl", {
@@ -103,6 +152,7 @@ resource "helm_release" "otel" {
       otlp_grpc_max_recv_msg_size_mib = var.otel.otlp_grpc_max_recv_msg_size_mib
       service_namespace               = var.otel.service_namespace
       metrics_collection_interval     = var.otel.metrics_collection_interval
+      hostmetrics_process_enabled     = var.otel.hostmetrics_process_enabled
       prometheus_scrape_targets       = var.otel.prometheus_scrape_targets
       clickhouse_username             = var.otel.clickhouse_username
       clickhouse_password             = var.otel.clickhouse_password
@@ -110,6 +160,10 @@ resource "helm_release" "otel" {
       clickhouse_create_schema        = var.otel.clickhouse_create_schema
       clickhouse_cluster              = var.otel.clickhouse_cluster
       clickhouse_table_engine         = var.otel.clickhouse_table_engine
+      use_clickhouse_secret           = local.otel_clickhouse_secret != null
+      clickhouse_secret_name          = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.name : ""
+      clickhouse_secret_username_key  = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.username_key : ""
+      clickhouse_secret_password_key  = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.password_key : ""
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled
@@ -118,6 +172,7 @@ resource "helm_release" "otel" {
       log_trace_enabled   = var.otel.log_parsing.trace_enabled
       log_trace_id_field  = var.otel.log_parsing.trace_id_field
       log_span_id_field   = var.otel.log_parsing.span_id_field
+      log_service_field   = var.otel.log_parsing.service_field
 
       # Pre-computed pipeline lists
       traces_exporters    = local.traces_exporters
@@ -127,6 +182,15 @@ resource "helm_release" "otel" {
       gigapipe_label_keep = local.gigapipe_label_keep
       metrics_receivers   = local.metrics_receivers
       clickhouse_endpoint = var.otel.clickhouse_endpoint
+
+      # Kafka buffering
+      kafka_role           = local.kafka_role
+      kafka_brokers        = local.kafka_brokers_yaml
+      kafka_metrics_topic  = var.otel.kafka.metrics_topic
+      kafka_logs_topic     = var.otel.kafka.logs_topic
+      kafka_traces_topic   = var.otel.kafka.traces_topic
+      kafka_encoding       = var.otel.kafka.encoding
+      kafka_consumer_group = var.otel.kafka.consumer_group
 
       # Resource requests/limits
       requests_cpu    = var.otel.resources.requests_cpu
@@ -142,7 +206,7 @@ resource "helm_release" "otel" {
     }))
   ]
 
-  depends_on = [kubernetes_namespace.otel]
+  depends_on = [kubernetes_namespace.otel, kubernetes_secret.otel_clickhouse_credentials]
 }
 
 resource "helm_release" "otel_operator" {
@@ -155,9 +219,9 @@ resource "helm_release" "otel_operator" {
   namespace  = var.otel.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 300
+  wait             = var.otel.wait
+  wait_for_jobs    = var.otel.wait_for_jobs
+  timeout          = var.otel.timeout
 
   values = [
     yamlencode({

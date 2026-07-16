@@ -13,6 +13,9 @@ variable "mimir" {
     ingress_annotations = optional(map(string), {
       "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
     })
+    wait             = optional(bool, true)
+    wait_for_jobs    = optional(bool, true)
+    timeout          = optional(number, 600)
     replicas         = optional(number, 1)
     retention_period = optional(string, "30d")
     # Tenant ID sent in X-Scope-OrgID header by all clients (Prometheus, Grafana).
@@ -122,6 +125,14 @@ variable "mimir" {
       var.mimir.storage.gcs_alertmanager_bucket == ""
     ))
     error_message = "When storage.backend is 'gcs', gcs_blocks_bucket, gcs_ruler_bucket, and gcs_alertmanager_bucket are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.mimir.storage.s3_credentials_secret, null) != null &&
+      (try(var.mimir.storage.s3_access_key, "") != "" || try(var.mimir.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key / storage.s3_secret_key."
   }
 
   validation {

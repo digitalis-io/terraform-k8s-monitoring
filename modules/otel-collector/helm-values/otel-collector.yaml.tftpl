@@ -82,6 +82,18 @@ extraEnvs:
     valueFrom:
       fieldRef:
         fieldPath: spec.nodeName
+%{ if use_clickhouse_secret ~}
+  - name: CLICKHOUSE_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: ${clickhouse_secret_name}
+        key: ${clickhouse_secret_username_key}
+  - name: CLICKHOUSE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ${clickhouse_secret_name}
+        key: ${clickhouse_secret_password_key}
+%{ endif ~}
 
 %{ if mode == "daemonset" ~}
 extraVolumes:
@@ -108,6 +120,28 @@ securityContext:
 %{ endif ~}
 config:
   receivers:
+%{ if kafka_role == "consumer" ~}
+    # Kafka consumer role: drain the buffer topics into the backend exporters.
+    # One receiver per signal/topic; a shared group_id lets multiple consumer
+    # replicas balance partitions. Data was already enriched by the producer, so
+    # the consumer pipelines below run a lean processor set.
+    kafka/metrics:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_metrics_topic}
+      encoding: ${kafka_encoding}
+      group_id: ${kafka_consumer_group}
+    kafka/logs:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_logs_topic}
+      encoding: ${kafka_encoding}
+      group_id: ${kafka_consumer_group}
+    kafka/traces:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_traces_topic}
+      encoding: ${kafka_encoding}
+      group_id: ${kafka_consumer_group}
+%{ endif ~}
+%{ if kafka_role != "consumer" ~}
     otlp:
       protocols:
         grpc:
@@ -146,6 +180,19 @@ config:
           span_id:
             parse_from: attributes.${log_span_id_field}
 %{ endif ~}
+%{ if log_service_field != "" ~}
+        # Promote the app's own service field to the OTel resource service.name.
+        # Structured stdout logs carry the service in the body (e.g. `service`),
+        # NOT as service.name -- and OTEL_SERVICE_NAME only affects an SDK's OTLP
+        # export, not stdout logs tailed by filelog -- so without this these logs
+        # bucket under `unknown_service` (Loki service_name label). k8sattributes
+        # can't fill it either when the pod has no app.kubernetes.io/name label.
+        # Guarded so lines without the field keep whatever service.name they have.
+        - type: move
+          if: 'attributes["${log_service_field}"] != nil'
+          from: attributes["${log_service_field}"]
+          to: resource["service.name"]
+%{ endif ~}
 %{ endif ~}
     hostmetrics:
       root_path: /hostfs
@@ -164,11 +211,24 @@ config:
             match_type: strict
         network: {}
         paging: {}
+%{ if hostmetrics_process_enabled ~}
+        # Per-PID process metrics. Off by default: very high cardinality (a series
+        # per PID) AND it carries process.command_line, which a remote-write
+        # backend promotes to a `process_command_line` label -- node command lines
+        # (node-problem-detector, kubelet, ...) blow past Prometheus/Mimir's 2048-
+        # char label-value limit and the whole series is rejected (400). When
+        # enabled, drop the unbounded attributes so they can't become labels.
         process:
           mute_process_name_error: true
           mute_process_exe_error: true
           mute_process_io_error: true
           mute_process_user_error: true
+          resource_attributes:
+            process.command_line:
+              enabled: false
+            process.executable.path:
+              enabled: false
+%{ endif ~}
         processes: {}
     # Per-node kubelet metrics: pod/container CPU, memory, network, filesystem,
     # and volume usage. Talks to the local kubelet over the node's own name
@@ -198,6 +258,7 @@ config:
             scrape_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "30s"}
             static_configs:
               - targets: ${jsonencode(prometheus_scrape_targets)}
+%{ endif ~}
 %{ endif ~}
 %{ endif ~}
 
@@ -256,6 +317,7 @@ config:
           statements:
             - keep_keys(attributes, [${gigapipe_label_keep}])
 %{ endif ~}
+%{ if kafka_role != "consumer" ~}
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -289,10 +351,28 @@ config:
               name: k8s.pod.uid
         - sources:
             - from: connection
+%{ endif ~}
 
   exporters:
     debug:
       verbosity: basic
+%{ if kafka_role == "producer" ~}
+    # Kafka producer role: this collector ships OTLP to the buffer topics instead
+    # of writing the backends directly (a consumer collector drains them). One
+    # exporter per signal -- each is used in its matching pipeline below.
+    kafka/metrics:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_metrics_topic}
+      encoding: ${kafka_encoding}
+    kafka/logs:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_logs_topic}
+      encoding: ${kafka_encoding}
+    kafka/traces:
+      brokers: [${kafka_brokers}]
+      topic: ${kafka_traces_topic}
+      encoding: ${kafka_encoding}
+%{ endif ~}
 %{ if tempo_endpoint != "" ~}
     otlp/tempo:
       endpoint: ${tempo_endpoint}
@@ -362,18 +442,23 @@ config:
 %{ endif ~}
 %{ if clickhouse_endpoint != "" ~}
     clickhouse:
-      endpoint: ${clickhouse_endpoint}
+      endpoint: "${clickhouse_endpoint}"
+%{ if use_clickhouse_secret ~}
+      username: "$${env:CLICKHOUSE_USERNAME}"
+      password: "$${env:CLICKHOUSE_PASSWORD}"
+%{ else ~}
 %{ if clickhouse_username != "" ~}
-      username: ${clickhouse_username}
-      password: ${clickhouse_password}
+      username: "${clickhouse_username}"
+      password: "${clickhouse_password}"
 %{ endif ~}
-      database: ${clickhouse_database}
+%{ endif ~}
+      database: "${clickhouse_database}"
 %{ if clickhouse_cluster != "" ~}
-      cluster_name: ${clickhouse_cluster}
+      cluster_name: "${clickhouse_cluster}"
 %{ endif ~}
 %{ if clickhouse_table_engine != "" ~}
       table_engine:
-        name: ${clickhouse_table_engine}
+        name: "${clickhouse_table_engine}"
 %{ endif ~}
       logs_table_name: otel_logs
       traces_table_name: otel_traces
@@ -388,6 +473,22 @@ config:
 
   service:
     pipelines:
+%{ if kafka_role == "consumer" ~}
+      # Consumer role: read the buffer topics, apply only memory_limiter + batch
+      # (enrichment already happened on the producer), write the backends.
+      metrics:
+        receivers: [kafka/metrics]
+        processors: [memory_limiter, batch]
+        exporters: ${metrics_exporters}
+      logs:
+        receivers: [kafka/logs]
+        processors: [memory_limiter, batch]
+        exporters: ${logs_exporters}
+      traces:
+        receivers: [kafka/traces]
+        processors: [memory_limiter, batch]
+        exporters: ${traces_exporters}
+%{ else ~}
       traces:
         receivers: [otlp]
         processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
@@ -409,6 +510,7 @@ config:
         receivers: ${logs_receivers}
         processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}transform/gigapipe_labels, batch]
         exporters: [otlphttp/logs]
+%{ endif ~}
 %{ endif ~}
 
 resources:

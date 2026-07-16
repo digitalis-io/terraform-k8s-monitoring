@@ -7,6 +7,11 @@ variable "pyroscope" {
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
 
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
+
     replicas = optional(number, 1)
 
     resources = optional(object({
@@ -26,7 +31,6 @@ variable "pyroscope" {
       s3_region     = optional(string, "")
       s3_endpoint   = optional(string, "")  # override for S3-compatible endpoints (Hetzner, MinIO, Ceph, etc.)
       s3_insecure   = optional(bool, false) # set true for HTTP-only endpoints
-      s3_path_style = optional(bool, false) # set true for non-AWS S3 (Hetzner, MinIO, Ceph require this)
       s3_access_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
       s3_secret_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
       # Object key prefix for all Pyroscope objects in S3; allows sharing one bucket with other components.
@@ -97,5 +101,13 @@ variable "pyroscope" {
       var.pyroscope.storage.azure_container == ""
     ))
     error_message = "When storage.backend is 'azure', azure_storage_account and azure_container are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.pyroscope.storage.s3_credentials_secret, null) != null &&
+      (try(var.pyroscope.storage.s3_access_key, "") != "" || try(var.pyroscope.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key/s3_secret_key. Set only one."
   }
 }

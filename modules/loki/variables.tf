@@ -12,6 +12,11 @@ variable "loki" {
     replicas         = optional(number, 1)
     retention_period = optional(string, "744h") # 31 days
 
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
+
     resources = optional(object({
       requests_cpu    = optional(string, "100m")
       requests_memory = optional(string, "256Mi")
@@ -104,5 +109,13 @@ variable "loki" {
       var.loki.storage.azure_ruler_container == ""
     ))
     error_message = "When storage.backend is 'azure', azure_storage_account and both azure container names are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.loki.storage.s3_credentials_secret, null) != null &&
+      (try(var.loki.storage.s3_access_key, "") != "" || try(var.loki.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key/s3_secret_key. Set only one method for supplying S3 credentials."
   }
 }

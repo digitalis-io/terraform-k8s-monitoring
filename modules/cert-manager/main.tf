@@ -73,21 +73,19 @@ resource "helm_release" "cert_manager" {
   version          = var.cert_manager.chart_version
   namespace        = var.cert_manager.namespace
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 300
+  wait             = var.cert_manager.wait
+  wait_for_jobs    = var.cert_manager.wait_for_jobs
+  timeout          = var.cert_manager.timeout
 
   values = [
-    yamlencode(merge(
-      {
-        crds            = { enabled = true }
-        nodeSelector    = local.cert_manager_scheduling.nodeSelector
-        tolerations     = local.cert_manager_scheduling.tolerations
-        webhook         = local.cert_manager_scheduling
-        cainjector      = local.cert_manager_scheduling
-        startupapicheck = local.cert_manager_scheduling
-      },
-    ))
+    yamlencode({
+      crds            = { enabled = true }
+      nodeSelector    = local.cert_manager_scheduling.nodeSelector
+      tolerations     = local.cert_manager_scheduling.tolerations
+      webhook         = local.cert_manager_scheduling
+      cainjector      = local.cert_manager_scheduling
+      startupapicheck = local.cert_manager_scheduling
+    })
   ]
 
   depends_on = [kubernetes_namespace.cert_manager]
@@ -100,14 +98,32 @@ resource "helm_release" "cert_manager" {
 #
 # triggers_replace includes the rendered manifest, so any change to the issuer
 # type/config or its name re-applies it (previously only a chart id change did).
+#
+# triggers_replace is a map (not a list) so the destroy-time provisioner can
+# read kubeconfig_path and issuer_name back out via self.triggers_replace.* —
+# destroy-time provisioners cannot reference var.* at all, only self.
 resource "terraform_data" "cluster_issuer" {
-  triggers_replace = [
-    helm_release.cert_manager.id,
-    local.cert_manager_cluster_issuer,
-  ]
+  triggers_replace = {
+    helm_release_id = helm_release.cert_manager.id
+    manifest        = local.cert_manager_cluster_issuer
+    kubeconfig_path = var.cert_manager.kubeconfig_path
+    issuer_name     = var.cert_manager.cluster_issuer_name
+  }
 
   provisioner "local-exec" {
     command = "${local.cert_manager_kubectl} apply -f - <<'YAML'\n${local.cert_manager_cluster_issuer}\nYAML"
+  }
+
+  # Best-effort cleanup so `tofu destroy` doesn't orphan the ClusterIssuer on
+  # the cluster. Idempotent (--ignore-not-found) and non-fatal by design:
+  # destroy-time provisioners cannot access var.* or local.*, only self.
+  provisioner "local-exec" {
+    when = destroy
+    command = join(" ", compact([
+      "kubectl",
+      self.triggers_replace.kubeconfig_path != "" ? "--kubeconfig=${self.triggers_replace.kubeconfig_path}" : "",
+      "delete clusterissuer ${self.triggers_replace.issuer_name} --ignore-not-found",
+    ]))
   }
 
   depends_on = [helm_release.cert_manager]

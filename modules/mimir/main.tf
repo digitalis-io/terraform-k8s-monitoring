@@ -21,7 +21,7 @@ resource "kubernetes_secret" "mimir_s3_credentials" {
   count = local.mimir_create_s3_secret ? 1 : 0
 
   metadata {
-    name      = "mimir-s3-credentials"
+    name      = local.mimir_s3_secret.name
     namespace = var.mimir.namespace
     labels = {
       "app.kubernetes.io/managed-by" = "terraform"
@@ -63,9 +63,9 @@ resource "helm_release" "mimir" {
   namespace  = var.mimir.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.mimir.wait
+  wait_for_jobs    = var.mimir.wait_for_jobs
+  timeout          = var.mimir.timeout
 
   values = [
     templatefile("${path.module}/helm-values/mimir.yaml.tftpl", {
@@ -97,6 +97,7 @@ resource "helm_release" "mimir" {
       gcs_blocks_prefix       = var.mimir.storage.gcs_blocks_prefix
       gcs_ruler_prefix        = var.mimir.storage.gcs_ruler_prefix
       gcs_alertmanager_prefix = var.mimir.storage.gcs_alertmanager_prefix
+      gcs_service_account_key = var.mimir.storage.gcs_service_account_key
 
       # Azure
       azure_storage_account        = var.mimir.storage.azure_storage_account

@@ -60,4 +60,14 @@ variable "grafana_rules" {
     condition     = !var.grafana_rules.email.enabled || length(var.grafana_rules.email.addresses) > 0
     error_message = "email.addresses must not be empty when email.enabled is true."
   }
+
+  validation {
+    condition = alltrue([
+      contains(["critical", "warning", "info"], var.grafana_rules.slack.min_severity),
+      contains(["critical", "warning", "info"], var.grafana_rules.pagerduty.min_severity),
+      contains(["critical", "warning", "info"], var.grafana_rules.webhook.min_severity),
+      contains(["critical", "warning", "info"], var.grafana_rules.email.min_severity),
+    ])
+    error_message = "min_severity for each channel (slack/pagerduty/webhook/email) must be one of: critical, warning, info."
+  }
 }

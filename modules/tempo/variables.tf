@@ -6,11 +6,13 @@ variable "tempo" {
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
-    # "monolithic"   — single tempo process (default, good for dev/blog)
-    # "distributed"  — separate ingester, distributor, querier, compactor, etc.
-    deployment_mode = optional(string, "monolithic")
-    replicas        = optional(number, 1)
-    retention       = optional(string, "720h") # 30 days
+    replicas              = optional(number, 1)
+    retention             = optional(string, "720h") # 30 days
+
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
 
     resources = optional(object({
       requests_cpu    = optional(string, "100m")
@@ -59,6 +61,11 @@ variable "tempo" {
     # When empty, metricsGenerator is disabled (default).
     metrics_generator_remote_write_url = optional(string, "")
 
+    # Mimir/Prometheus tenant ID sent as the X-Scope-OrgID header on the
+    # metrics-generator remote_write request. Must match the tenant configured
+    # on the receiving Mimir/Prometheus instance (defaults to "anonymous").
+    tenant_id = optional(string, "anonymous")
+
     # Annotations to add to the Tempo ServiceAccount.
     # Use this for IRSA, GKE Workload Identity, or Azure Workload Identity.
     # No IAM resources are created by this module; pre-create the role/SA and supply the annotation here.
@@ -76,13 +83,16 @@ variable "tempo" {
   default = {}
 
   validation {
-    condition     = contains(["monolithic", "distributed"], var.tempo.deployment_mode)
-    error_message = "deployment_mode must be one of: monolithic, distributed."
+    condition     = contains(["local", "s3", "gcs", "azure"], var.tempo.storage.backend)
+    error_message = "storage.backend must be one of: local, s3, gcs, azure."
   }
 
   validation {
-    condition     = contains(["local", "s3", "gcs", "azure"], var.tempo.storage.backend)
-    error_message = "storage.backend must be one of: local, s3, gcs, azure."
+    condition = !(
+      try(var.tempo.storage.s3_credentials_secret, null) != null &&
+      (try(var.tempo.storage.s3_access_key, "") != "" || try(var.tempo.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key / storage.s3_secret_key."
   }
 
   validation {

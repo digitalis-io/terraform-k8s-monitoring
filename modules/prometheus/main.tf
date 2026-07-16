@@ -21,6 +21,47 @@ locals {
     local.grafana_db_create_secret ? { name = "prometheus-grafana-db", field = "password" } :
     null
   )
+
+  # ClickHouse Grafana datasource password — same pattern as grafana_database:
+  # reference an existing Secret, else auto-create one from the plaintext
+  # password, so it is injected via Grafana's $__env{} expansion rather than
+  # rendered plaintext into secureJsonData / the Helm values / Terraform state.
+  clickhouse_ds = var.prometheus.clickhouse_datasource
+
+  clickhouse_ds_create_secret = try(
+    local.clickhouse_ds != null &&
+    local.clickhouse_ds.password_secret == null &&
+    local.clickhouse_ds.password != "",
+    false
+  )
+
+  clickhouse_ds_secret = (
+    local.clickhouse_ds == null ? null :
+    try(local.clickhouse_ds.password_secret, null) != null ? local.clickhouse_ds.password_secret :
+    local.clickhouse_ds_create_secret ? { name = "prometheus-clickhouse-datasource", field = "password" } :
+    null
+  )
+}
+
+resource "kubernetes_secret" "clickhouse_datasource" {
+  count = local.clickhouse_ds_create_secret ? 1 : 0
+
+  metadata {
+    name      = "prometheus-clickhouse-datasource"
+    namespace = var.prometheus.namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "terraform"
+      "app.kubernetes.io/component"  = "monitoring"
+    }
+  }
+
+  data = {
+    password = local.clickhouse_ds.password
+  }
+
+  type = "Opaque"
+
+  depends_on = [kubernetes_namespace.prometheus]
 }
 
 resource "kubernetes_secret" "grafana_database" {
@@ -68,9 +109,9 @@ resource "helm_release" "prometheus" {
   namespace  = var.prometheus.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.prometheus.wait
+  wait_for_jobs    = var.prometheus.wait_for_jobs
+  timeout          = var.prometheus.timeout
 
   values = [
     sensitive(templatefile("${path.module}/helm-values/prometheus.yaml.tftpl", {
@@ -119,6 +160,7 @@ resource "helm_release" "prometheus" {
       pyroscope_datasource_url = var.prometheus.pyroscope_datasource_url
       tempo_profile_type_id    = var.prometheus.tempo_profile_type_id
       clickhouse_datasource    = var.prometheus.clickhouse_datasource
+      clickhouse_ds_secret     = local.clickhouse_ds_secret
 
       grafana_plugins           = var.prometheus.grafana_plugins
       grafana_dashboard_imports = var.prometheus.grafana_dashboard_imports
@@ -130,7 +172,7 @@ resource "helm_release" "prometheus" {
     }))
   ]
 
-  depends_on = [kubernetes_namespace.prometheus, kubernetes_secret.grafana_database]
+  depends_on = [kubernetes_namespace.prometheus, kubernetes_secret.grafana_database, kubernetes_secret.clickhouse_datasource]
 }
 
 locals {

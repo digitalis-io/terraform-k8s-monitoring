@@ -6,7 +6,13 @@ variable "otel" {
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
-    mode                  = optional(string, "daemonset") # daemonset | deployment
+    # Helm release readiness. wait/wait_for_jobs block apply until resources are
+    # ready; set wait = false for async/GitOps rollouts. Applies to both the
+    # collector and (when enabled) the operator release.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
+    mode          = optional(string, "daemonset") # daemonset | deployment
     # Deployment/StatefulSet replica count. Ignored in daemonset mode (one pod
     # per node). Raise for a deployment gateway that must absorb a high OTLP
     # ingest rate -- a single replica is a throughput bottleneck.
@@ -64,6 +70,13 @@ variable "otel" {
     # (hostmetrics, kubeletstats, k8s_cluster) -- each otherwise defaults to a
     # different interval (10s/20s/30s). Empty keeps those per-receiver defaults.
     metrics_collection_interval = optional(string, "")
+    # Per-PID process metrics on the daemonset hostmetrics receiver. Off by
+    # default: a series per PID (very high cardinality) and it carries
+    # process.command_line, which a remote-write backend promotes to an oversized
+    # label (node command lines exceed Mimir's 2048-char label limit -> the series
+    # is rejected with err-mimir-label-value-too-long). Enable only when you need
+    # per-process series; the unbounded attributes are dropped even then.
+    hostmetrics_process_enabled = optional(bool, false)
     clickhouse_endpoint         = optional(string, "")     # ClickHouse HTTP :8123 -- use module.clickhouse.http_endpoint
     clickhouse_username         = optional(string, "")     # ClickHouse username for OTLP/ClickHouse exporter
     clickhouse_password         = optional(string, "")     # ClickHouse password for OTLP/ClickHouse exporter
@@ -71,6 +84,16 @@ variable "otel" {
     clickhouse_create_schema    = optional(bool, true)     # auto-create DB/tables on startup
     clickhouse_cluster          = optional(string, "")     # cluster name -> ON CLUSTER DDL (creates tables on all nodes)
     clickhouse_table_engine     = optional(string, "")     # e.g. ReplicatedMergeTree (pair with clickhouse_cluster for replication)
+    # Reference a pre-existing Secret holding the ClickHouse username/password.
+    # When set, credentials are injected via secretKeyRef + ${env:...} expansion
+    # rather than rendered plaintext into the Helm values / Terraform state.
+    # Mutually exclusive with clickhouse_username/clickhouse_password. When null
+    # and clickhouse_password is set, the module auto-creates a Secret instead.
+    clickhouse_credentials_secret = optional(object({
+      name         = string
+      username_key = optional(string, "username")
+      password_key = optional(string, "password")
+    }), null)
 
     # Structured-log parsing for the daemonset `filelog` receiver.
     # Promotes trace context and severity from JSON pod logs into native OTel
@@ -97,6 +120,11 @@ variable "otel" {
       trace_enabled  = optional(bool, true)
       trace_id_field = optional(string, "trace_id")
       span_id_field  = optional(string, "span_id")
+
+      # JSON body field promoted to the OTel resource `service.name` (so stdout
+      # logs carrying their own service field aren't bucketed as
+      # `unknown_service`). Requires json_enabled = true. "" disables the promotion.
+      service_field = optional(string, "service")
     }), {})
 
     image = optional(object({
@@ -144,11 +172,44 @@ variable "otel" {
       go_instrumentation_enabled = optional(bool, false)
       go_instrumentation_image   = optional(string, "") # defaults to chart appVersion image when empty
     }), {})
+
+    # Optional Kafka buffering (see modules/kafka-gke). When `brokers` is set and
+    # `role` is producer/consumer the metrics/logs/traces pipelines are rewired:
+    #   producer -> pipeline exporters become kafka/{metrics,logs,traces} (this
+    #     collector ships OTLP to the topics instead of the backends directly);
+    #   consumer -> pipeline receivers become kafka/{metrics,logs,traces} with a
+    #     lean processor set, draining the topics into the backend exporters
+    #     (which stay wired from tempo_/mimir2_/loki_endpoint).
+    # role "" (default) => Kafka off, direct writes as before.
+    kafka = optional(object({
+      brokers        = optional(string, "") # bootstrap host:port (comma-sep ok); "" disables
+      role           = optional(string, "") # producer | consumer | ""
+      metrics_topic  = optional(string, "otlp_metrics")
+      logs_topic     = optional(string, "otlp_logs")
+      traces_topic   = optional(string, "otlp_traces")
+      encoding       = optional(string, "otlp_proto")
+      consumer_group = optional(string, "otel-consumer")
+    }), {})
   })
   default = {}
 
   validation {
     condition     = contains(["daemonset", "deployment"], var.otel.mode)
     error_message = "mode must be one of: daemonset, deployment."
+  }
+
+  validation {
+    condition     = contains(["", "producer", "consumer"], var.otel.kafka.role)
+    error_message = "otel.kafka.role must be one of: \"\", producer, consumer."
+  }
+
+  validation {
+    condition     = contains(["otlp_proto", "otlp_json"], var.otel.kafka.encoding)
+    error_message = "otel.kafka.encoding must be otlp_proto or otlp_json (the OTLP payload encodings for the kafka exporter/receiver)."
+  }
+
+  validation {
+    condition     = var.otel.clickhouse_credentials_secret == null || (var.otel.clickhouse_username == "" && var.otel.clickhouse_password == "")
+    error_message = "clickhouse_credentials_secret is mutually exclusive with clickhouse_username/clickhouse_password — set one or the other, not both."
   }
 }

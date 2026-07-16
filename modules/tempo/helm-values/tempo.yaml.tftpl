@@ -70,6 +70,8 @@ metricsGenerator:
       remote_write:
         - url: ${metrics_generator_remote_write_url}
           send_exemplars: true
+          headers:
+            X-Scope-OrgID: "${tenant_id}"
 %{ else ~}
   enabled: false
 %{ endif ~}

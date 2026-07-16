@@ -8,26 +8,26 @@ policies:
     repeat_interval: 4h
     routes:
 %{ if pagerduty_enabled ~}
-      - receiver: default-receiver
+      - receiver: contact-point-pagerduty
         object_matchers:
           - ["severity", "=~", "${pagerduty_severity}"]
         continue: true
 %{ endif ~}
 %{ if slack_enabled ~}
-      - receiver: default-receiver
+      - receiver: contact-point-slack
         object_matchers:
           - ["severity", "=~", "${slack_severity}"]
-        continue: ${pagerduty_enabled ? "true" : "false"}
+        continue: true
 %{ endif ~}
 %{ if webhook_enabled ~}
-      - receiver: default-receiver
+      - receiver: contact-point-webhook
         object_matchers:
           - ["severity", "=~", "${webhook_severity}"]
-        continue: false
+        continue: true
 %{ endif ~}
 %{ if email_enabled ~}
-      - receiver: default-receiver
+      - receiver: contact-point-email
         object_matchers:
           - ["severity", "=~", "${email_severity}"]
-        continue: false
+        continue: true
 %{ endif ~}

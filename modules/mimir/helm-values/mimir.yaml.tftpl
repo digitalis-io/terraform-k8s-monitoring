@@ -49,6 +49,9 @@ mimir:
 %{ endif ~}
       gcs:
         bucket_name: ${gcs_blocks_bucket}
+%{ if gcs_service_account_key != "" ~}
+        service_account: ${gcs_service_account_key}
+%{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "azure" ~}
       azure:
@@ -95,6 +98,9 @@ mimir:
 %{ endif ~}
       gcs:
         bucket_name: ${gcs_alertmanager_bucket}
+%{ if gcs_service_account_key != "" ~}
+        service_account: ${gcs_service_account_key}
+%{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "azure" ~}
       azure:
@@ -138,6 +144,9 @@ mimir:
 %{ endif ~}
       gcs:
         bucket_name: ${gcs_ruler_bucket}
+%{ if gcs_service_account_key != "" ~}
+        service_account: ${gcs_service_account_key}
+%{ endif ~}
 %{ endif ~}
 %{ if storage_backend == "azure" ~}
       azure:

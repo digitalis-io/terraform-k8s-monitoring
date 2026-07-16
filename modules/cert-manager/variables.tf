@@ -33,6 +33,11 @@ variable "cert_manager" {
     # When empty, kubectl uses its default resolution order (KUBECONFIG env var, then ~/.kube/config).
     kubeconfig_path = optional(string, "")
 
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 300)
+
     # Pod scheduling, applied to all cert-manager components (controller,
     # webhook, cainjector, startupapicheck). tolerations let the pods schedule
     # onto tainted pools (e.g. GKE's kubernetes.io/arch=arm64:NoSchedule).

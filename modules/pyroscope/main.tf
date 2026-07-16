@@ -61,9 +61,9 @@ resource "helm_release" "pyroscope" {
   namespace  = var.pyroscope.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.pyroscope.wait
+  wait_for_jobs    = var.pyroscope.wait_for_jobs
+  timeout          = var.pyroscope.timeout
 
   values = [
     templatefile("${path.module}/helm-values/pyroscope.yaml.tftpl", {
