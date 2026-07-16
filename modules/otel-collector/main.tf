@@ -184,13 +184,14 @@ resource "helm_release" "otel" {
       clickhouse_endpoint = var.otel.clickhouse_endpoint
 
       # Kafka buffering
-      kafka_role           = local.kafka_role
-      kafka_brokers        = local.kafka_brokers_yaml
-      kafka_metrics_topic  = var.otel.kafka.metrics_topic
-      kafka_logs_topic     = var.otel.kafka.logs_topic
-      kafka_traces_topic   = var.otel.kafka.traces_topic
-      kafka_encoding       = var.otel.kafka.encoding
-      kafka_consumer_group = var.otel.kafka.consumer_group
+      kafka_role              = local.kafka_role
+      kafka_brokers           = local.kafka_brokers_yaml
+      kafka_metrics_topic     = var.otel.kafka.metrics_topic
+      kafka_logs_topic        = var.otel.kafka.logs_topic
+      kafka_traces_topic      = var.otel.kafka.traces_topic
+      kafka_encoding          = var.otel.kafka.encoding
+      kafka_consumer_group    = var.otel.kafka.consumer_group
+      kafka_max_message_bytes = var.otel.kafka.max_message_bytes
 
       # Resource requests/limits
       requests_cpu    = var.otel.resources.requests_cpu

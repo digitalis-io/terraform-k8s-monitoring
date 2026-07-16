@@ -125,21 +125,27 @@ config:
     # One receiver per signal/topic; a shared group_id lets multiple consumer
     # replicas balance partitions. Data was already enriched by the producer, so
     # the consumer pipelines below run a lean processor set.
+    # topics (plural list) + encoding moved under a per-signal block in the kafka
+    # receiver (contrib >=~0.140); the old top-level topic/encoding keys are gone.
+    # brokers/group_id stay top-level (shared consumer-group settings).
     kafka/metrics:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_metrics_topic}
-      encoding: ${kafka_encoding}
       group_id: ${kafka_consumer_group}
+      metrics:
+        topics: [${kafka_metrics_topic}]
+        encoding: ${kafka_encoding}
     kafka/logs:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_logs_topic}
-      encoding: ${kafka_encoding}
       group_id: ${kafka_consumer_group}
+      logs:
+        topics: [${kafka_logs_topic}]
+        encoding: ${kafka_encoding}
     kafka/traces:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_traces_topic}
-      encoding: ${kafka_encoding}
       group_id: ${kafka_consumer_group}
+      traces:
+        topics: [${kafka_traces_topic}]
+        encoding: ${kafka_encoding}
 %{ endif ~}
 %{ if kafka_role != "consumer" ~}
     otlp:
@@ -375,18 +381,33 @@ config:
     # Kafka producer role: this collector ships OTLP to the buffer topics instead
     # of writing the backends directly (a consumer collector drains them). One
     # exporter per signal -- each is used in its matching pipeline below.
+    # topic/encoding moved under a per-signal block in the kafka exporter
+    # (contrib >=~0.140); the old top-level topic/encoding keys are rejected.
+    # producer.max_message_bytes is the pre-compression cap (default ~1 MB) and
+    # must be >= the broker/topic max.message.bytes, else large firehose batches
+    # fail with MESSAGE_TOO_LARGE. (Optional: add producer.compression once the
+    # exact key is confirmed for this collector version, to cut broker storage.)
     kafka/metrics:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_metrics_topic}
-      encoding: ${kafka_encoding}
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+      metrics:
+        topic: ${kafka_metrics_topic}
+        encoding: ${kafka_encoding}
     kafka/logs:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_logs_topic}
-      encoding: ${kafka_encoding}
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+      logs:
+        topic: ${kafka_logs_topic}
+        encoding: ${kafka_encoding}
     kafka/traces:
       brokers: [${kafka_brokers}]
-      topic: ${kafka_traces_topic}
-      encoding: ${kafka_encoding}
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+      traces:
+        topic: ${kafka_traces_topic}
+        encoding: ${kafka_encoding}
 %{ endif ~}
 %{ if tempo_endpoint != "" ~}
     otlp/tempo:

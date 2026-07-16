@@ -189,6 +189,9 @@ variable "otel" {
       traces_topic   = optional(string, "otlp_traces")
       encoding       = optional(string, "otlp_proto")
       consumer_group = optional(string, "otel-consumer")
+      # producer kafka-exporter max_message_bytes; keep >= broker/topic
+      # max.message.bytes or large batches fail with MESSAGE_TOO_LARGE.
+      max_message_bytes = optional(number, 1000000)
     }), {})
   })
   default = {}
