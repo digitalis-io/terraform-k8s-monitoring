@@ -44,11 +44,28 @@ locals {
   # `prometheus` receiver (scraping e.g. kube-state-metrics) is opt-in via
   # prometheus_scrape_targets, deployment mode only (a single scraper, like
   # k8s_cluster, not one per node).
+  # Strimzi/Kafka scrape receiver (prometheus/strimzi). Deployment mode only.
+  # Added to the metrics pipeline receivers for BOTH the direct/producer gateway
+  # and the consumer (the consumer branch wires it via consumer_metrics_receivers
+  # below), so a Kafka-buffered topology can scrape Kafka on whichever collector
+  # writes the store directly.
+  kafka_scrape_enabled = var.otel.mode == "deployment" && var.otel.kafka_metrics_scrape.enabled
+  # Cluster-wide annotation-based pod scrape (prometheus/pods). Deployment only.
+  pod_scrape_enabled = var.otel.mode == "deployment" && var.otel.prometheus_pod_scrape.enabled
+  # Opt-in scrape receivers shared by the direct/producer gateway (metrics_receivers)
+  # and the consumer (consumer_metrics_receivers) so a Kafka-buffered topology
+  # scrapes on whichever collector writes the store directly (bypassing the buffer).
+  _extra_scrape_receivers = concat(
+    local.kafka_scrape_enabled ? ["prometheus/strimzi"] : [],
+    local.pod_scrape_enabled ? ["prometheus/pods"] : [],
+  )
   _metrics_receivers_deployment = concat(
     ["otlp", "k8s_cluster"],
     length(var.otel.prometheus_scrape_targets) > 0 ? ["prometheus"] : [],
+    local._extra_scrape_receivers,
   )
-  metrics_receivers = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[${join(", ", local._metrics_receivers_deployment)}]"
+  metrics_receivers          = var.otel.mode == "daemonset" ? "[otlp, hostmetrics, kubeletstats]" : "[${join(", ", local._metrics_receivers_deployment)}]"
+  consumer_metrics_receivers = "[${join(", ", concat(["kafka/metrics"], local._extra_scrape_receivers))}]"
 
   # Tolerations with empty `value` dropped (Exists-style entries), for the
   # operator Helm values (yamlencode).
@@ -154,16 +171,27 @@ resource "helm_release" "otel" {
       metrics_collection_interval     = var.otel.metrics_collection_interval
       hostmetrics_process_enabled     = var.otel.hostmetrics_process_enabled
       prometheus_scrape_targets       = var.otel.prometheus_scrape_targets
-      clickhouse_username             = var.otel.clickhouse_username
-      clickhouse_password             = var.otel.clickhouse_password
-      clickhouse_database             = var.otel.clickhouse_database
-      clickhouse_create_schema        = var.otel.clickhouse_create_schema
-      clickhouse_cluster              = var.otel.clickhouse_cluster
-      clickhouse_table_engine         = var.otel.clickhouse_table_engine
-      use_clickhouse_secret           = local.otel_clickhouse_secret != null
-      clickhouse_secret_name          = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.name : ""
-      clickhouse_secret_username_key  = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.username_key : ""
-      clickhouse_secret_password_key  = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.password_key : ""
+
+      # Strimzi/Kafka scrape receiver (prometheus/strimzi)
+      kafka_metrics_scrape_enabled   = local.kafka_scrape_enabled
+      kafka_metrics_scrape_namespace = var.otel.kafka_metrics_scrape.namespace
+      kafka_metrics_scrape_interval  = var.otel.kafka_metrics_scrape.interval
+      consumer_metrics_receivers     = local.consumer_metrics_receivers
+
+      # Annotation-based pod scrape receiver (prometheus/pods)
+      pod_scrape_enabled             = local.pod_scrape_enabled
+      pod_scrape_namespaces          = var.otel.prometheus_pod_scrape.namespaces
+      pod_scrape_interval            = var.otel.prometheus_pod_scrape.interval
+      clickhouse_username            = var.otel.clickhouse_username
+      clickhouse_password            = var.otel.clickhouse_password
+      clickhouse_database            = var.otel.clickhouse_database
+      clickhouse_create_schema       = var.otel.clickhouse_create_schema
+      clickhouse_cluster             = var.otel.clickhouse_cluster
+      clickhouse_table_engine        = var.otel.clickhouse_table_engine
+      use_clickhouse_secret          = local.otel_clickhouse_secret != null
+      clickhouse_secret_name         = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.name : ""
+      clickhouse_secret_username_key = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.username_key : ""
+      clickhouse_secret_password_key = local.otel_clickhouse_secret != null ? local.otel_clickhouse_secret.password_key : ""
 
       # Structured-log (filelog) parsing knobs
       log_json_enabled    = var.otel.log_parsing.json_enabled

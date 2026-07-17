@@ -36,6 +36,35 @@ variable "otel" {
     # ("kube-state-metrics.monitoring.svc:8080"). Empty list omits the
     # receiver entirely.
     prometheus_scrape_targets = optional(list(string), [])
+    # Strimzi/Kafka Prometheus scraping (mode = "deployment" only). When enabled a
+    # `prometheus/strimzi` receiver uses the Kubernetes pod SD to discover
+    # Strimzi-managed pods in `namespace` (brokers/controllers running the JMX
+    # Prometheus Exporter, plus the Kafka Exporter) and scrapes their :9404
+    # metrics port, feeding the metrics pipeline (-> the backend metrics
+    # exporters). Its relabelings mirror Strimzi's PodMonitor so the shipped
+    # Grafana dashboards' label selectors resolve. Put this on the collector that
+    # writes the metrics store DIRECTLY (the consumer in a Kafka-buffered
+    # topology) so Kafka's own metrics don't route through the buffer they
+    # measure. interval "" => metrics_collection_interval, else 30s.
+    kafka_metrics_scrape = optional(object({
+      enabled   = optional(bool, false)
+      namespace = optional(string, "kafka")
+      interval  = optional(string, "")
+    }), {})
+    # Cluster-wide annotation-based pod scraping (mode = "deployment" only). When
+    # enabled a `prometheus/pods` receiver uses the Kubernetes pod SD to discover
+    # every pod annotated `prometheus.io/scrape: "true"` and scrapes its
+    # `prometheus.io/port` + `prometheus.io/path` (default /metrics) -- the
+    # de-facto Prometheus annotation convention -- feeding the metrics pipeline.
+    # Covers arbitrary app metrics (e.g. the firehose load-gen's
+    # firehose_export_wire_bytes_total on :2112) without ServiceMonitor/PodMonitor
+    # CRDs (it does NOT read those). Like the Strimzi scrape, put it on the
+    # collector that writes the store directly. namespaces [] => all namespaces.
+    prometheus_pod_scrape = optional(object({
+      enabled    = optional(bool, false)
+      namespaces = optional(list(string), [])
+      interval   = optional(string, "")
+    }), {})
     # Generic OTLP/HTTP exporters for backends that speak plain OTLP/HTTP but
     # don't match the Loki (`<endpoint>/otlp`) or Tempo (gRPC :4317) conventions
     # above -- e.g. gigapipe's native /v1/logs and /v1/traces routes. Each is a

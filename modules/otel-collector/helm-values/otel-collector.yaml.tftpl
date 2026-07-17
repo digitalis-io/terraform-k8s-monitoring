@@ -171,8 +171,15 @@ config:
           parse_to: attributes
           if: '${log_json_match_expr}'
 %{ if log_severity_field != "" ~}
-          severity:
-            parse_from: attributes.${log_severity_field}
+        # Map the app's log level to OTel severity. Standalone + if-guarded rather
+        # than a json_parser `severity:` sub-field: the embedded form fires for
+        # every JSON line the parser handles, so a JSON log without a level field
+        # errors the whole batch ("log entry does not have the expected parse_from
+        # field: attributes.level"). The guard skips lines that lack the field
+        # (plain text, or JSON without a level).
+        - type: severity_parser
+          if: 'attributes["${log_severity_field}"] != nil'
+          parse_from: attributes.${log_severity_field}
 %{ endif ~}
 %{ if log_trace_enabled ~}
         # Promote trace_id/span_id from the parsed JSON into the log record's
@@ -266,6 +273,100 @@ config:
               - targets: ${jsonencode(prometheus_scrape_targets)}
 %{ endif ~}
 %{ endif ~}
+%{ endif ~}
+
+%{ if kafka_metrics_scrape_enabled ~}
+    # Strimzi/Kafka Prometheus scraping. The Kubernetes pod SD discovers
+    # Strimzi-managed pods (brokers/controllers running the JMX Prometheus
+    # Exporter, plus the Kafka Exporter) in the kafka namespace and scrapes their
+    # :9404 metrics port. Named prometheus/strimzi so it coexists with the static
+    # `prometheus` receiver (kube-state-metrics). Rendered outside the kafka_role
+    # gate so it attaches to whichever deployment collector writes the store
+    # directly -- the consumer in a buffered topology -- keeping Kafka's own
+    # metrics off the buffer they measure. Relabelings mirror Strimzi's PodMonitor
+    # so the shipped Grafana dashboards' label selectors (strimzi_io_cluster,
+    # kubernetes_pod_name, node_name, ...) resolve.
+    prometheus/strimzi:
+      config:
+        scrape_configs:
+          - job_name: strimzi
+            scrape_interval: ${kafka_metrics_scrape_interval != "" ? kafka_metrics_scrape_interval : (metrics_collection_interval != "" ? metrics_collection_interval : "30s")}
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names: [${kafka_metrics_scrape_namespace}]
+            relabel_configs:
+              # Keep only Strimzi-managed pods (they carry strimzi.io/cluster) ...
+              - source_labels: [__meta_kubernetes_pod_label_strimzi_io_cluster]
+                action: keep
+                regex: .+
+              # ... and only their metrics container port (JMX exporter / Kafka
+              # Exporter both expose :9404).
+              - source_labels: [__meta_kubernetes_pod_container_port_number]
+                action: keep
+                regex: "9404"
+              # Promote strimzi.io/* pod labels to metric labels (strimzi_io_cluster,
+              # strimzi_io_kind, strimzi_io_name, ...), matching Strimzi's PodMonitor.
+              - action: labelmap
+                regex: __meta_kubernetes_pod_label_(strimzi_io_.+)
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: kubernetes_pod_name
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: node_name
+              - source_labels: [__meta_kubernetes_pod_host_ip]
+                target_label: node_ip
+%{ endif ~}
+%{ if pod_scrape_enabled ~}
+    # Cluster-wide annotation-based pod scraping. The Kubernetes pod SD discovers
+    # every pod annotated prometheus.io/scrape="true" and scrapes its
+    # prometheus.io/port + prometheus.io/path (default /metrics) -- e.g. the
+    # firehose load-gen (firehose_export_wire_bytes_total on :2112). This honors
+    # the de-facto Prometheus annotation convention; it does NOT read
+    # ServiceMonitor/PodMonitor CRDs (the coreos prometheus-operator CRDs are not
+    # installed). Rendered outside the kafka_role gate so it attaches to whichever
+    # deployment collector writes the store directly.
+    prometheus/pods:
+      config:
+        scrape_configs:
+          - job_name: kubernetes-pods
+            scrape_interval: ${pod_scrape_interval != "" ? pod_scrape_interval : (metrics_collection_interval != "" ? metrics_collection_interval : "30s")}
+            kubernetes_sd_configs:
+              - role: pod
+%{ if length(pod_scrape_namespaces) > 0 ~}
+                namespaces:
+                  names: ${jsonencode(pod_scrape_namespaces)}
+%{ endif ~}
+            relabel_configs:
+              # Only pods opting in via prometheus.io/scrape="true".
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: "true"
+              # Drop terminated pods' phantom SD targets.
+              - source_labels: [__meta_kubernetes_pod_phase]
+                action: drop
+                regex: "(Succeeded|Failed)"
+              # metrics path <- prometheus.io/path (default stays /metrics).
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                action: replace
+                target_label: __metrics_path__
+                regex: "(.+)"
+              # address <- podIP:prometheus.io/port.
+              - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                regex: "([^:]+)(?::\\d+)?;(\\d+)"
+                replacement: "$1:$2"
+                target_label: __address__
+              # Promote app labels for dashboards (Strimzi + generic).
+              - action: labelmap
+                regex: "__meta_kubernetes_pod_label_(strimzi_io_.+)"
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: kubernetes_pod_name
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: node_name
 %{ endif ~}
 
   processors:
@@ -513,7 +614,7 @@ config:
       # Consumer role: read the buffer topics, apply only memory_limiter + batch
       # (enrichment already happened on the producer), write the backends.
       metrics:
-        receivers: [kafka/metrics]
+        receivers: ${consumer_metrics_receivers}
         processors: [memory_limiter, resource/strip_process, batch]
         exporters: ${metrics_exporters}
       logs:
