@@ -211,9 +211,20 @@ config:
       root_path: /hostfs
       collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "10s"}
       scrapers:
-        cpu: {}
+        # system.cpu.utilization / system.memory.utilization are opt-in (default
+        # scrapers emit only system.cpu.time / system.memory.usage). The OTel
+        # HostMetrics dashboard (Grafana 20376) CPU + memory panels query the
+        # utilization gauges, so enable them or those panels stay blank (disk io
+        # is default-on, which is why disk works and cpu/mem don't).
+        cpu:
+          metrics:
+            system.cpu.utilization:
+              enabled: true
         load: {}
-        memory: {}
+        memory:
+          metrics:
+            system.memory.utilization:
+              enabled: true
         disk: {}
         filesystem:
           exclude_mount_points:
