@@ -220,6 +220,7 @@ resource "helm_release" "otel" {
       kafka_encoding          = var.otel.kafka.encoding
       kafka_consumer_group    = var.otel.kafka.consumer_group
       kafka_max_message_bytes = var.otel.kafka.max_message_bytes
+      kafka_compression       = var.otel.kafka.compression
 
       # Resource requests/limits
       requests_cpu    = var.otel.resources.requests_cpu

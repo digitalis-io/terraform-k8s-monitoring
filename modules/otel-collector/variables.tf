@@ -221,6 +221,10 @@ variable "otel" {
       # producer kafka-exporter max_message_bytes; keep >= broker/topic
       # max.message.bytes or large batches fail with MESSAGE_TOO_LARGE.
       max_message_bytes = optional(number, 1000000)
+      # producer compression codec (none|gzip|snappy|lz4|zstd). Kafka enforces
+      # max.message.bytes on the COMPRESSED batch, so zstd/snappy keeps large
+      # log batches under the limit and cuts broker storage/replication.
+      compression = optional(string, "none")
     }), {})
   })
   default = {}

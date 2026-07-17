@@ -484,14 +484,15 @@ config:
     # exporter per signal -- each is used in its matching pipeline below.
     # topic/encoding moved under a per-signal block in the kafka exporter
     # (contrib >=~0.140); the old top-level topic/encoding keys are rejected.
-    # producer.max_message_bytes is the pre-compression cap (default ~1 MB) and
-    # must be >= the broker/topic max.message.bytes, else large firehose batches
-    # fail with MESSAGE_TOO_LARGE. (Optional: add producer.compression once the
-    # exact key is confirmed for this collector version, to cut broker storage.)
+    # producer.max_message_bytes must be >= the broker/topic max.message.bytes,
+    # else large firehose batches fail with MESSAGE_TOO_LARGE. producer.compression
+    # shrinks the batch Kafka size-checks (enforced on the COMPRESSED batch), so
+    # zstd/snappy keeps big log batches under the cap and cuts broker storage.
     kafka/metrics:
       brokers: [${kafka_brokers}]
       producer:
         max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
       metrics:
         topic: ${kafka_metrics_topic}
         encoding: ${kafka_encoding}
@@ -499,6 +500,7 @@ config:
       brokers: [${kafka_brokers}]
       producer:
         max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
       logs:
         topic: ${kafka_logs_topic}
         encoding: ${kafka_encoding}
@@ -506,6 +508,7 @@ config:
       brokers: [${kafka_brokers}]
       producer:
         max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
       traces:
         topic: ${kafka_traces_topic}
         encoding: ${kafka_encoding}
