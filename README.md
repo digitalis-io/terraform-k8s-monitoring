@@ -794,6 +794,7 @@ Complete, copy-paste examples are available in the `examples/` directory:
 | `examples/s3compatible/` | S3-compatible storage (Hetzner, MinIO, Ceph) with path-style addressing |
 | `examples/gcp/` | Full stack on GCS backend with Workload Identity on GKE |
 | `examples/gcp/mimir-gcs/` | Metrics-only slice — Mimir (GCS) + Grafana on GKE, with ACME/Let's Encrypt ingress TLS |
+| `examples/kafka/` | Kafka-buffered pipeline — a producer OTel Collector ships OTLP to Kafka topics and a consumer Collector drains them into Tempo/Mimir/Loki (bring your own broker) |
 
 ### Use S3 for Mimir storage (with IRSA)
 

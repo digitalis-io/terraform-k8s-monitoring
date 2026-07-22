@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `examples/kafka`: new example — a Kafka-buffered telemetry pipeline. A producer OpenTelemetry Collector receives OTLP and ships it to Kafka topics; a separate consumer Collector drains the topics into Tempo/Mimir/Loki. Backends use local-disk storage; the Kafka broker is supplied by the caller (`kafka_brokers`). Demonstrates the `otel.kafka` producer/consumer roles.
 - `modules/loki`: `chart_repository` variable (default `oci://ghcr.io/grafana/helm-charts`) to override the Helm repo the Loki chart is pulled from. To run Loki ≥ 3.7, point `chart_repository` at the community-maintained `grafana-community` fork and set a community `chart_version` (e.g. `18.5.0` = Loki 3.7.3).
 - All modules: `wait`, `wait_for_jobs`, and `timeout` are now configurable on every `helm_release` (defaults unchanged — `true`/`true`/`300` for cert-manager and the otel operator, `600` elsewhere). Set `wait = false` for async/GitOps rollouts. `otel-collector` exposes them for both the collector and operator releases. Closes [#33](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/33).
 - `modules/otel-collector`: `clickhouse_credentials_secret` variable — reference (or auto-create) a Kubernetes Secret and inject the ClickHouse username/password via `secretKeyRef` + `${env:...}` expansion instead of rendering them plaintext into the Helm values. Part of [#30](https://github.com/digitalis-io/terraform-k8s-monitoring/issues/30).
