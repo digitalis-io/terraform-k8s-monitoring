@@ -165,7 +165,11 @@ mimir:
     # so we set both here to make the architecture deterministic across chart bumps.
     ingest_storage:
       enabled: ${kafka_ingest_enabled}
-%{ if kafka_ingest_enabled ~}
+%{ if kafka_ingest_enabled && (kafka_ingest_address != "" || kafka_ingest_topic != "" || kafka_ingest_partitions > 0) ~}
+      # Only emit the kafka: key when at least one field is overridden. Emitting
+      # an empty map renders `kafka: null`, and the chart's mergeOverwrite would
+      # then DELETE its own auto-computed kafka block (bundled address, default
+      # topic/partitions), leaving Mimir with no broker address.
       kafka:
 %{ if kafka_ingest_address != "" ~}
         address: ${kafka_ingest_address}

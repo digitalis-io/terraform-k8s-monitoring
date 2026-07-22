@@ -124,6 +124,11 @@ variable "mimir" {
   }
 
   validation {
+    condition     = var.mimir.kafka_ingest.partitions >= 0
+    error_message = "kafka_ingest.partitions must be >= 0 (0 keeps the chart default; must be >= the max ingester replicas in a zone)."
+  }
+
+  validation {
     condition     = contains(["local", "s3", "gcs", "azure"], var.mimir.storage.backend)
     error_message = "storage.backend must be one of: local, s3, gcs, azure."
   }
