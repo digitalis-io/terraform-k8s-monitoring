@@ -352,7 +352,7 @@ module "loki" {
 | Variable | Default | Description |
 | --- | --- | --- |
 | `chart_version` | `"7.1.0"` | Loki Helm chart version |
-| `chart_repository` | `"https://grafana.github.io/helm-charts"` | Helm repo for the Loki chart. Point at the `grafana-community` fork (with a community `chart_version`) to run Loki ≥ 3.7 |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the Loki chart. Official chart is now OCI on ghcr.io (`grafana/loki` repo; the `grafana.github.io` HTTP repo is frozen). Point at the `grafana-community` fork (with a community `chart_version`) to run Loki ≥ 3.7 |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `deployment_mode` | `"single-binary"` | `single-binary` or `scalable` |
