@@ -206,6 +206,7 @@ module "mimir" {
 | --- | --- | --- |
 | `chart_version` | `"6.1.0"` | Mimir distributed Helm chart version |
 | `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the `mimir-distributed` chart. Grafana froze the `grafana.github.io` HTTP repo; the chart is now published as OCI on ghcr.io (public — no login needed) |
+| `kafka_ingest` | `{ enabled = false }` | Kafka ingest-storage architecture (Mimir 3.x write path). Off = classic ingester path. `enabled = true` with empty `address` deploys the chart's bundled demo Kafka; set `address` (host:port) to use an external broker. `topic`/`partitions` override the defaults. See `examples/mimir-kafka` |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `retention_period` | `"30d"` | How long to keep metrics |
 | `tenant_id` | `"anonymous"` | Value sent in `X-Scope-OrgID` header by Prometheus and Grafana |
@@ -795,6 +796,7 @@ Complete, copy-paste examples are available in the `examples/` directory:
 | `examples/gcp/` | Full stack on GCS backend with Workload Identity on GKE |
 | `examples/gcp/mimir-gcs/` | Metrics-only slice — Mimir (GCS) + Grafana on GKE, with ACME/Let's Encrypt ingress TLS |
 | `examples/kafka/` | Kafka-buffered pipeline — a producer OTel Collector ships OTLP to Kafka topics and a consumer Collector drains them into Tempo/Mimir/Loki (bring your own broker) |
+| `examples/mimir-kafka/` | Mimir with the Kafka ingest-storage backend — Prometheus remote-writes through Kafka into Mimir (bundled demo Kafka by default, or bring your own broker) |
 
 ### Use S3 for Mimir storage (with IRSA)
 

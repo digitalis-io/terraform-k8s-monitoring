@@ -6,6 +6,10 @@ locals {
     var.mimir.storage.s3_access_key != ""
   )
 
+  # Deploy the chart's bundled demo Kafka only when opting into ingest storage
+  # without supplying an external broker address.
+  mimir_kafka_bundled = var.mimir.kafka_ingest.enabled && var.mimir.kafka_ingest.address == ""
+
   # Resolved secret reference — external (caller-supplied) or module-managed.
   mimir_s3_secret = (
     var.mimir.storage.s3_credentials_secret != null ? var.mimir.storage.s3_credentials_secret :
@@ -122,6 +126,13 @@ resource "helm_release" "mimir" {
       limits_memory   = var.mimir.resources.limits_memory
 
       service_account_annotations = var.mimir.service_account_annotations
+
+      # Kafka ingest storage (default off → classic ingester path)
+      kafka_ingest_enabled    = var.mimir.kafka_ingest.enabled
+      kafka_ingest_bundled    = local.mimir_kafka_bundled
+      kafka_ingest_address    = var.mimir.kafka_ingest.address
+      kafka_ingest_topic      = var.mimir.kafka_ingest.topic
+      kafka_ingest_partitions = var.mimir.kafka_ingest.partitions
     }),
     var.mimir.extra_values
   ]

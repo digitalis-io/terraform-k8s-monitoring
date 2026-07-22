@@ -160,6 +160,44 @@ mimir:
     usage_stats:
       enabled: false
 
+    # Ingest storage (Kafka write path). Pinned explicitly: the 6.x chart default
+    # config enables ingest_storage and disables the Push gRPC API unconditionally,
+    # so we set both here to make the architecture deterministic across chart bumps.
+    ingest_storage:
+      enabled: ${kafka_ingest_enabled}
+%{ if kafka_ingest_enabled ~}
+      kafka:
+%{ if kafka_ingest_address != "" ~}
+        address: ${kafka_ingest_address}
+%{ endif ~}
+%{ if kafka_ingest_topic != "" ~}
+        topic: ${kafka_ingest_topic}
+%{ endif ~}
+%{ if kafka_ingest_partitions > 0 ~}
+        auto_create_topic_default_partitions: ${kafka_ingest_partitions}
+%{ endif ~}
+%{ endif ~}
+    ingester:
+      # Classic path serves the Push gRPC API; Kafka ingest disables it (all
+      # writes arrive via Kafka).
+      push_grpc_method_enabled: ${kafka_ingest_enabled ? "false" : "true"}
+
+# Kafka ingest-storage architecture. The mimir-distributed 6.x chart defaults
+# this ON (bundled demo Kafka + zone-aware ingesters/store-gateways); we pin the
+# whole architecture so a chart bump never silently flips it.
+# kafka.enabled deploys the chart's bundled demo Kafka — only when opting in
+# without an external broker address.
+kafka:
+  enabled: ${kafka_ingest_bundled}
+# Zone-aware replication follows the ingest architecture: on for Kafka (the
+# distributed write path expects zones), off for the classic single-replica path.
+ingester:
+  zoneAwareReplication:
+    enabled: ${kafka_ingest_enabled}
+store_gateway:
+  zoneAwareReplication:
+    enabled: ${kafka_ingest_enabled}
+
 # Disable the chart's bundled MinIO — we use external object storage.
 # Without this, the chart injects MinIO-based S3 configs for usage-stats
 # and other modules that conflict with our external S3 configuration.

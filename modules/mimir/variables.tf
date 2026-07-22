@@ -5,7 +5,23 @@ variable "mimir" {
     # Helm repo for the mimir-distributed chart. Grafana froze the
     # https://grafana.github.io/helm-charts HTTP repo; the chart is now published
     # as OCI on ghcr.io. Public registry — no login required.
-    chart_repository      = optional(string, "oci://ghcr.io/grafana/helm-charts")
+    chart_repository = optional(string, "oci://ghcr.io/grafana/helm-charts")
+
+    # Kafka ingest-storage architecture (Mimir 3.x write path via Kafka).
+    # https://grafana.com/docs/mimir/latest/configure/configure-kafka-backend/
+    # Default off → classic ingester path (single-replica friendly). The
+    # mimir-distributed 6.x chart defaults this ON with a bundled demo Kafka and
+    # zone-aware ingesters; the module pins the architecture explicitly so it
+    # never flips on a chart bump.
+    #   enabled=true, address="" → deploy the chart's bundled demo Kafka.
+    #   enabled=true, address set → use an external broker (bring-your-own).
+    kafka_ingest = optional(object({
+      enabled    = optional(bool, false)
+      address    = optional(string, "") # external bootstrap host:port; "" uses the bundled demo Kafka
+      topic      = optional(string, "") # "" keeps the chart default (mimir-ingest)
+      partitions = optional(number, 0)  # auto_create_topic_default_partitions; must be >= max ingester replicas per zone. 0 keeps chart default
+    }), {})
+
     namespace             = optional(string, "monitoring")
     create_namespace      = optional(bool, true)
     namespace_labels      = optional(map(string), {})
