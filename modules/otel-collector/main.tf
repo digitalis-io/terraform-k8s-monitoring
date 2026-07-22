@@ -147,8 +147,9 @@ resource "helm_release" "otel" {
 
   values = [
     sensitive(templatefile("${path.module}/helm-values/otel-collector.yaml.tftpl", {
-      mode     = var.otel.mode
-      replicas = var.otel.replicas
+      mode         = var.otel.mode
+      replicas     = var.otel.replicas
+      release_name = var.otel.release_name
 
       # Image
       image_repository  = var.otel.image.repository

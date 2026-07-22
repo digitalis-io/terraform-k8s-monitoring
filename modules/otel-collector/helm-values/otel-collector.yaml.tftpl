@@ -18,7 +18,22 @@ service:
   internalTrafficPolicy: Local
 %{ endif ~}
 
+# Self-monitoring: expose the collector's own internal telemetry (otelcol_*, on
+# :8888) to the annotation-based prometheus/pods scrape so it lands in Mimir --
+# feeds the "OpenTelemetry Collector" dashboard (gnet 15983). Every collector pod
+# (gateway/consumer/daemonset agent) is annotated; the consumer's (or, kafka-off,
+# the gateway's) cluster-wide prometheus/pods job scrapes them all on pod IP:8888.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+  prometheus.io/path: "/metrics"
+
 ports:
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
   otlp:
     enabled: true
     containerPort: 4317
@@ -378,6 +393,31 @@ config:
                 target_label: kubernetes_pod_name
               - source_labels: [__meta_kubernetes_pod_node_name]
                 target_label: node_name
+              # Loki mixin compatibility: the grafana.com Loki dashboards match
+              # cluster + job="<namespace>/loki-<component>" + pod, but the generic
+              # annotation scrape above only yields job="kubernetes-pods" and no
+              # cluster label -- so the mixin's $cluster template var is empty and
+              # every panel filters to nothing. Stamp the mixin labels, scoped to
+              # Loki pods (app.kubernetes.io/name=loki) via regex so non-Loki
+              # targets (firehose, Strimzi, KSM) keep job=kubernetes-pods. Mirrors
+              # what Mimir/Tempo get from their grafana-agent meta-monitoring.
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                regex: loki
+                target_label: cluster
+                replacement: loki
+              # NOTE: $$1/$$2 (double-dollar). The OTel Collector confmap expands
+              # dollar-brace env-var refs, so a single-dollar capture-group ref here
+              # is misread as env var "1" and the collector fails to start
+              # ("invalid name"). Doubling escapes it: templatefile emits $$1, OTel
+              # unescapes $$ to a single dollar, leaving Prometheus its $$1 ref.
+              - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_label_app_kubernetes_io_component]
+                regex: (.+);(loki);(.+)
+                target_label: job
+                replacement: $$1/$$2-$$3
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_name]
+                regex: loki;(.+)
+                target_label: pod
+                replacement: $$1
 %{ endif ~}
 
   processors:
@@ -623,6 +663,12 @@ config:
 %{ endif ~}
 
   service:
+    # Bind the collector's internal telemetry to all interfaces so the annotation
+    # scrape (prometheus/pods, on pod IP:8888) can reach otelcol_* -- the chart
+    # default may bind localhost only. Feeds gnet 15983.
+    telemetry:
+      metrics:
+        address: 0.0.0.0:8888
     pipelines:
 %{ if kafka_role == "consumer" ~}
       # Consumer role: read the buffer topics, apply only memory_limiter + batch
@@ -696,4 +742,22 @@ tolerations:
 %{ endif ~}
     effect: "${t.effect}"
 %{ endfor ~}
+%{ endif ~}
+%{ if mode != "daemonset" ~}
+# Cross-AZ egress reduction for the gateway/consumer Deployment: spread replicas
+# one-per-zone so a same-zone endpoint exists for callers using
+# Service.trafficDistribution=PreferSameZone (agent -> gateway, gateway ->
+# stores). Soft (ScheduleAnyway) so it never blocks scheduling on a constrained
+# pool. The chart renders topologySpreadConstraints verbatim (no auto
+# labelSelector), so pin it to THIS release's pods -- otherwise the constraint
+# would span every collector release in the namespace. daemonset mode is
+# per-node already (see internalTrafficPolicy Local above), so this is skipped.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: opentelemetry-collector
+        app.kubernetes.io/instance: ${release_name}
 %{ endif ~}
