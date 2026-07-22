@@ -5,7 +5,9 @@ output "namespace" {
 
 output "remote_write_endpoint" {
   description = "Prometheus remote_write URL for this Mimir instance."
-  value       = "http://mimir-nginx.${var.mimir.namespace}.svc.cluster.local/api/v1/push"
+  # Chart 6.x replaced the standalone `nginx` proxy with the `gateway` component,
+  # so the write path is served by the `mimir-gateway` service (was `mimir-nginx`).
+  value = "http://mimir-gateway.${var.mimir.namespace}.svc.cluster.local/api/v1/push"
 }
 
 output "query_frontend_endpoint" {

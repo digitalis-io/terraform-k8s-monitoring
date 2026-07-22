@@ -229,7 +229,9 @@ global:
 %{ endif ~}
 
 %{ if ingress_enabled ~}
-nginx:
+# Chart 6.x replaced the standalone `nginx` proxy with the `gateway` component;
+# ingress now lives under `gateway.ingress` (was `nginx.ingress`).
+gateway:
   ingress:
     enabled: true
     ingressClassName: ${ingress_class_name}
