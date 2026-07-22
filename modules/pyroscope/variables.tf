@@ -1,7 +1,11 @@
 variable "pyroscope" {
   description = "Grafana Pyroscope configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "2.1.1")
+    chart_version = optional(string, "2.1.2")
+    # Helm repo for the pyroscope chart. Grafana froze the
+    # https://grafana.github.io/helm-charts HTTP repo; the chart is now published
+    # as OCI on ghcr.io. Public registry — no login required.
+    chart_repository      = optional(string, "oci://ghcr.io/grafana/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

@@ -55,7 +55,7 @@ resource "kubernetes_namespace" "pyroscope" {
 
 resource "helm_release" "pyroscope" {
   name       = "pyroscope"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.pyroscope.chart_repository
   chart      = "pyroscope"
   version    = var.pyroscope.chart_version
   namespace  = var.pyroscope.namespace

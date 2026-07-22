@@ -1,7 +1,7 @@
 variable "prometheus" {
   description = "kube-prometheus-stack configuration. All fields are optional with safe defaults."
   type = object({
-    chart_version         = optional(string, "87.16.1")
+    chart_version         = optional(string, "87.19.0")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

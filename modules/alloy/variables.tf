@@ -2,7 +2,11 @@ variable "alloy" {
   description = "Grafana Alloy configuration. All fields are optional with safe defaults."
   type = object({
     # Chart version from https://artifacthub.io/packages/helm/grafana/alloy
-    chart_version         = optional(string, "1.10.1")
+    chart_version = optional(string, "1.11.0")
+    # Helm repo for the alloy chart. Unlike the other Grafana charts, alloy is
+    # still published to the grafana.github.io HTTP repo (no OCI package yet), so
+    # this defaults to HTTP. Override if a future OCI source appears.
+    chart_repository      = optional(string, "https://grafana.github.io/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

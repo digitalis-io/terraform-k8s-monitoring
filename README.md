@@ -256,7 +256,7 @@ module "prometheus" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"87.16.1"` | kube-prometheus-stack Helm chart version |
+| `chart_version` | `"87.19.0"` | kube-prometheus-stack Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -520,7 +520,8 @@ module "alloy" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.10.1"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `chart_version` | `"1.11.0"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `chart_repository` | `"https://grafana.github.io/helm-charts"` | Helm repo for the Alloy chart. Alloy has no OCI package yet, so it stays on the HTTP repo |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -659,7 +660,8 @@ module "pyroscope" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"2.1.1"` | Pyroscope Helm chart version |
+| `chart_version` | `"2.1.2"` | Pyroscope Helm chart version |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the Pyroscope chart. Now OCI on ghcr.io (the `grafana.github.io` HTTP repo is frozen); public — no login needed |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |

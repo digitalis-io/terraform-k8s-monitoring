@@ -99,7 +99,7 @@ resource "kubernetes_namespace" "alloy" {
 
 resource "helm_release" "alloy" {
   name       = var.alloy.release_name
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.alloy.chart_repository
   chart      = "alloy"
   version    = var.alloy.chart_version
   namespace  = var.alloy.namespace
