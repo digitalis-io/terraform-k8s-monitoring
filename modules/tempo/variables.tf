@@ -1,7 +1,14 @@
 variable "tempo" {
   description = "Grafana Tempo configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "1.61.3")
+    chart_version = optional(string, "2.26.0")
+    # Helm repo for the tempo-distributed chart. Grafana froze the
+    # https://grafana.github.io/helm-charts HTTP repo; the chart is now
+    # community-maintained at grafana-community and published as OCI on ghcr.io.
+    # Public registry — no login required. The 2.x line keeps the classic
+    # ingester/compactor architecture (no Kafka). Tempo 3.x switches to a
+    # Kafka-based ingest pipeline — a separate, larger migration.
+    chart_repository      = optional(string, "oci://ghcr.io/grafana-community/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})

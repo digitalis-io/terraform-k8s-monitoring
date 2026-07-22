@@ -393,7 +393,8 @@ module "tempo" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.61.3"` | Tempo Helm chart version |
+| `chart_version` | `"2.26.0"` | Tempo (`tempo-distributed`) Helm chart version. 2.x keeps the classic ingester/compactor architecture (Tempo 2.10.x); 3.x moves to a Kafka-based ingest pipeline |
+| `chart_repository` | `"oci://ghcr.io/grafana-community/helm-charts"` | Helm repo for the `tempo-distributed` chart. Now community-maintained on the `grafana-community` OCI registry (the `grafana.github.io` HTTP repo is frozen); public — no login needed |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |

@@ -55,7 +55,7 @@ resource "kubernetes_namespace" "tempo" {
 
 resource "helm_release" "tempo" {
   name       = "tempo"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.tempo.chart_repository
   chart      = "tempo-distributed"
   version    = var.tempo.chart_version
   namespace  = var.tempo.namespace
