@@ -666,9 +666,16 @@ config:
     # Bind the collector's internal telemetry to all interfaces so the annotation
     # scrape (prometheus/pods, on pod IP:8888) can reach otelcol_* -- the chart
     # default may bind localhost only. Feeds gnet 15983.
+    # Collector 0.123+ removed service.telemetry.metrics.address; configure the
+    # internal Prometheus endpoint via a pull reader instead.
     telemetry:
       metrics:
-        address: 0.0.0.0:8888
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
     pipelines:
 %{ if kafka_role == "consumer" ~}
       # Consumer role: read the buffer topics, apply only memory_limiter + batch
