@@ -1,7 +1,11 @@
 variable "mimir" {
   description = "Grafana Mimir configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "6.1.0")
+    chart_version = optional(string, "6.1.0")
+    # Helm repo for the mimir-distributed chart. Grafana froze the
+    # https://grafana.github.io/helm-charts HTTP repo; the chart is now published
+    # as OCI on ghcr.io. Public registry — no login required.
+    chart_repository      = optional(string, "oci://ghcr.io/grafana/helm-charts")
     namespace             = optional(string, "monitoring")
     create_namespace      = optional(bool, true)
     namespace_labels      = optional(map(string), {})

@@ -205,6 +205,7 @@ module "mimir" {
 | Variable | Default | Description |
 | --- | --- | --- |
 | `chart_version` | `"6.1.0"` | Mimir distributed Helm chart version |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the `mimir-distributed` chart. Grafana froze the `grafana.github.io` HTTP repo; the chart is now published as OCI on ghcr.io (public — no login needed) |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `retention_period` | `"30d"` | How long to keep metrics |
 | `tenant_id` | `"anonymous"` | Value sent in `X-Scope-OrgID` header by Prometheus and Grafana |

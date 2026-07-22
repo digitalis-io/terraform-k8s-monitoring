@@ -57,7 +57,7 @@ resource "kubernetes_namespace" "mimir" {
 
 resource "helm_release" "mimir" {
   name       = "mimir"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.mimir.chart_repository
   chart      = "mimir-distributed"
   version    = var.mimir.chart_version
   namespace  = var.mimir.namespace
