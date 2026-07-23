@@ -5,7 +5,10 @@ output "namespace" {
 
 output "datasource_url" {
   description = "Grafana datasource URL for this Tempo instance."
-  value       = "http://tempo-query-frontend.${var.tempo.namespace}.svc.cluster.local:3100"
+  # tempo-distributed's query-frontend HTTP API listens on 3200 (server.http_
+  # listen_port default); the Service exposes 3200/TCP. 3100 (Loki's port) is
+  # nothing here -> Grafana's datasource echo dial-timeouts on the ClusterIP.
+  value = "http://tempo-query-frontend.${var.tempo.namespace}.svc.cluster.local:3200"
 }
 
 output "helm_release_name" {

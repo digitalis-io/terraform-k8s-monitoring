@@ -99,18 +99,18 @@ resource "kubernetes_namespace" "alloy" {
 
 resource "helm_release" "alloy" {
   name       = var.alloy.release_name
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.alloy.chart_repository
   chart      = "alloy"
   version    = var.alloy.chart_version
   namespace  = var.alloy.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.alloy.wait
+  wait_for_jobs    = var.alloy.wait_for_jobs
+  timeout          = var.alloy.timeout
 
   values = compact([
-    templatefile("${path.module}/helm-values/alloy.yaml.tftpl", {
+    sensitive(templatefile("${path.module}/helm-values/alloy.yaml.tftpl", {
       controller_type = var.alloy.controller_type
       replicas        = var.alloy.replicas
 
@@ -174,7 +174,7 @@ resource "helm_release" "alloy" {
       # Sensitive-data (PII) processor
       sensitive_data_enabled    = try(var.alloy.sensitive_data.enabled, true)
       sensitive_data_statements = local.alloy_sensitive_data_statements
-    }),
+    })),
     var.alloy.extra_values,
   ])
 

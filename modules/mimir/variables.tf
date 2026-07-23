@@ -1,7 +1,27 @@
 variable "mimir" {
   description = "Grafana Mimir configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "5.6.0")
+    chart_version = optional(string, "6.1.0")
+    # Helm repo for the mimir-distributed chart. Grafana froze the
+    # https://grafana.github.io/helm-charts HTTP repo; the chart is now published
+    # as OCI on ghcr.io. Public registry — no login required.
+    chart_repository = optional(string, "oci://ghcr.io/grafana/helm-charts")
+
+    # Kafka ingest-storage architecture (Mimir 3.x write path via Kafka).
+    # https://grafana.com/docs/mimir/latest/configure/configure-kafka-backend/
+    # Default off → classic ingester path (single-replica friendly). The
+    # mimir-distributed 6.x chart defaults this ON with a bundled demo Kafka and
+    # zone-aware ingesters; the module pins the architecture explicitly so it
+    # never flips on a chart bump.
+    #   enabled=true, address="" → deploy the chart's bundled demo Kafka.
+    #   enabled=true, address set → use an external broker (bring-your-own).
+    kafka_ingest = optional(object({
+      enabled    = optional(bool, false)
+      address    = optional(string, "") # external bootstrap host:port; "" uses the bundled demo Kafka
+      topic      = optional(string, "") # "" keeps the chart default (mimir-ingest)
+      partitions = optional(number, 0)  # auto_create_topic_default_partitions; must be >= max ingester replicas per zone. 0 keeps chart default
+    }), {})
+
     namespace             = optional(string, "monitoring")
     create_namespace      = optional(bool, true)
     namespace_labels      = optional(map(string), {})
@@ -13,6 +33,9 @@ variable "mimir" {
     ingress_annotations = optional(map(string), {
       "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
     })
+    wait             = optional(bool, true)
+    wait_for_jobs    = optional(bool, true)
+    timeout          = optional(number, 600)
     replicas         = optional(number, 1)
     retention_period = optional(string, "30d")
     # Tenant ID sent in X-Scope-OrgID header by all clients (Prometheus, Grafana).
@@ -101,6 +124,11 @@ variable "mimir" {
   }
 
   validation {
+    condition     = var.mimir.kafka_ingest.partitions >= 0
+    error_message = "kafka_ingest.partitions must be >= 0 (0 keeps the chart default; must be >= the max ingester replicas in a zone)."
+  }
+
+  validation {
     condition     = contains(["local", "s3", "gcs", "azure"], var.mimir.storage.backend)
     error_message = "storage.backend must be one of: local, s3, gcs, azure."
   }
@@ -122,6 +150,14 @@ variable "mimir" {
       var.mimir.storage.gcs_alertmanager_bucket == ""
     ))
     error_message = "When storage.backend is 'gcs', gcs_blocks_bucket, gcs_ruler_bucket, and gcs_alertmanager_bucket are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.mimir.storage.s3_credentials_secret, null) != null &&
+      (try(var.mimir.storage.s3_access_key, "") != "" || try(var.mimir.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key / storage.s3_secret_key."
   }
 
   validation {

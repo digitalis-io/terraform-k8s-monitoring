@@ -1,13 +1,13 @@
 apiVersion: 1
 contactPoints:
-  - orgId: 1
-    name: default-receiver
-    receivers:
 %{ if slack_enabled ~}
+  - orgId: 1
+    name: contact-point-slack
+    receivers:
       - uid: contact-point-slack
         type: slack
         settings:
-          url: ${slack_webhook_url}
+          url: '${slack_webhook_url}'
           recipient: '${slack_channel}'
           mentionChannel: here
           title: |
@@ -21,28 +21,46 @@ contactPoints:
         disableResolveMessage: false
 %{ endif ~}
 %{ if pagerduty_enabled ~}
+  - orgId: 1
+    name: contact-point-pagerduty
+    receivers:
       - uid: contact-point-pagerduty
         type: pagerduty
         settings:
-          integrationKey: ${pagerduty_integration_key}
+          integrationKey: '${pagerduty_integration_key}'
           severity: '{{ "{{" }} .CommonLabels.severity {{ "}}" }}'
           summary: '{{ "{{" }} .CommonAnnotations.summary {{ "}}" }}'
           details: '{{ "{{" }} .CommonAnnotations.description {{ "}}" }}'
         disableResolveMessage: false
 %{ endif ~}
 %{ if webhook_enabled ~}
+  - orgId: 1
+    name: contact-point-webhook
+    receivers:
       - uid: contact-point-webhook
         type: webhook
         settings:
-          url: ${webhook_url}
-          httpMethod: ${webhook_http_method}
+          url: '${webhook_url}'
+          httpMethod: '${webhook_http_method}'
         disableResolveMessage: false
 %{ endif ~}
 %{ if email_enabled ~}
+  - orgId: 1
+    name: contact-point-email
+    receivers:
       - uid: contact-point-email
         type: email
         settings:
-          addresses: ${email_addresses}
+          addresses: '${email_addresses}'
           singleEmail: false
         disableResolveMessage: false
 %{ endif ~}
+  # Root notification-policy receiver, intentionally empty. Alerts that match no
+  # severity route (i.e. below every enabled channel's min_severity) fall through
+  # to this receiver and are dropped, instead of being fanned out to all channels.
+  # Each enabled channel has its own contact point above, targeted by its own
+  # route in notification-policy.yaml — that is what makes per-channel
+  # min_severity filtering actually take effect.
+  - orgId: 1
+    name: default-receiver
+    receivers: []

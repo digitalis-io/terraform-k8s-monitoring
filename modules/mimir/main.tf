@@ -6,6 +6,10 @@ locals {
     var.mimir.storage.s3_access_key != ""
   )
 
+  # Deploy the chart's bundled demo Kafka only when opting into ingest storage
+  # without supplying an external broker address.
+  mimir_kafka_bundled = var.mimir.kafka_ingest.enabled && var.mimir.kafka_ingest.address == ""
+
   # Resolved secret reference — external (caller-supplied) or module-managed.
   mimir_s3_secret = (
     var.mimir.storage.s3_credentials_secret != null ? var.mimir.storage.s3_credentials_secret :
@@ -21,7 +25,7 @@ resource "kubernetes_secret" "mimir_s3_credentials" {
   count = local.mimir_create_s3_secret ? 1 : 0
 
   metadata {
-    name      = "mimir-s3-credentials"
+    name      = local.mimir_s3_secret.name
     namespace = var.mimir.namespace
     labels = {
       "app.kubernetes.io/managed-by" = "terraform"
@@ -57,15 +61,15 @@ resource "kubernetes_namespace" "mimir" {
 
 resource "helm_release" "mimir" {
   name       = "mimir"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.mimir.chart_repository
   chart      = "mimir-distributed"
   version    = var.mimir.chart_version
   namespace  = var.mimir.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.mimir.wait
+  wait_for_jobs    = var.mimir.wait_for_jobs
+  timeout          = var.mimir.timeout
 
   values = [
     templatefile("${path.module}/helm-values/mimir.yaml.tftpl", {
@@ -97,6 +101,7 @@ resource "helm_release" "mimir" {
       gcs_blocks_prefix       = var.mimir.storage.gcs_blocks_prefix
       gcs_ruler_prefix        = var.mimir.storage.gcs_ruler_prefix
       gcs_alertmanager_prefix = var.mimir.storage.gcs_alertmanager_prefix
+      gcs_service_account_key = var.mimir.storage.gcs_service_account_key
 
       # Azure
       azure_storage_account        = var.mimir.storage.azure_storage_account
@@ -121,6 +126,13 @@ resource "helm_release" "mimir" {
       limits_memory   = var.mimir.resources.limits_memory
 
       service_account_annotations = var.mimir.service_account_annotations
+
+      # Kafka ingest storage (default off → classic ingester path)
+      kafka_ingest_enabled    = var.mimir.kafka_ingest.enabled
+      kafka_ingest_bundled    = local.mimir_kafka_bundled
+      kafka_ingest_address    = var.mimir.kafka_ingest.address
+      kafka_ingest_topic      = var.mimir.kafka_ingest.topic
+      kafka_ingest_partitions = var.mimir.kafka_ingest.partitions
     }),
     var.mimir.extra_values
   ]

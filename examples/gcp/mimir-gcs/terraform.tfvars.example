@@ -1,0 +1,31 @@
+# Copy this file to terraform.tfvars and fill in your values.
+#   cp terraform.tfvars.example terraform.tfvars
+
+# -- Kubernetes ----------------------------------------------------------------
+kubeconfig_path = "/home/youruser/.kube/config" # absolute path — tilde (~) is not expanded
+namespace       = "monitoring"
+
+# -- Ingress -------------------------------------------------------------------
+ingress_domain = "monitoring.example.com"
+# -> Grafana at https://grafana.monitoring.example.com
+# -> Mimir API at https://mimir.monitoring.example.com
+acme_email = "platform@example.com" # Let's Encrypt registration / expiry-notice contact
+
+# -- GCP Workload Identity -----------------------------------------------------
+# Pre-create the Google Service Account and bind it via Workload Identity:
+#
+#   gcloud iam service-accounts create mimir --display-name="Mimir storage"
+#
+#   gsutil iam ch serviceAccount:mimir@my-project.iam.gserviceaccount.com:objectAdmin \
+#     gs://my-project-mimir-blocks gs://my-project-mimir-ruler gs://my-project-mimir-alertmanager
+#
+#   gcloud iam service-accounts add-iam-policy-binding \
+#     mimir@my-project.iam.gserviceaccount.com \
+#     --role roles/iam.workloadIdentityUser \
+#     --member "serviceAccount:my-project.svc.id.goog[monitoring/mimir]"
+mimir_gsa_email = "mimir@my-project.iam.gserviceaccount.com"
+
+# -- GCS buckets (pre-create these before apply) -------------------------------
+mimir_blocks_bucket       = "my-project-mimir-blocks"
+mimir_ruler_bucket        = "my-project-mimir-ruler"
+mimir_alertmanager_bucket = "my-project-mimir-alertmanager"

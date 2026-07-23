@@ -55,15 +55,15 @@ resource "kubernetes_namespace" "pyroscope" {
 
 resource "helm_release" "pyroscope" {
   name       = "pyroscope"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.pyroscope.chart_repository
   chart      = "pyroscope"
   version    = var.pyroscope.chart_version
   namespace  = var.pyroscope.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.pyroscope.wait
+  wait_for_jobs    = var.pyroscope.wait_for_jobs
+  timeout          = var.pyroscope.timeout
 
   values = [
     templatefile("${path.module}/helm-values/pyroscope.yaml.tftpl", {
@@ -103,7 +103,9 @@ resource "helm_release" "pyroscope" {
       limits_memory   = var.pyroscope.resources.limits_memory
 
       service_account_annotations = var.pyroscope.service_account_annotations
-    })
+    }),
+    # Caller-supplied raw YAML (nodeSelector/tolerations/affinity/...), deep-merged last.
+    var.pyroscope.extra_values,
   ]
 
   depends_on = [kubernetes_namespace.pyroscope, kubernetes_secret.pyroscope_s3_credentials]

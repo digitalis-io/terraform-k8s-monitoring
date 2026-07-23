@@ -1,11 +1,11 @@
 output "otlp_grpc_endpoint" {
   description = "OTLP gRPC endpoint for app instrumentation (port 4317)."
-  value       = "http://otel-opentelemetry-collector.${var.otel.namespace}.svc.cluster.local:4317"
+  value       = "http://${helm_release.otel.name}-opentelemetry-collector.${var.otel.namespace}.svc.cluster.local:4317"
 }
 
 output "otlp_http_endpoint" {
   description = "OTLP HTTP endpoint for app instrumentation (port 4318)."
-  value       = "http://otel-opentelemetry-collector.${var.otel.namespace}.svc.cluster.local:4318"
+  value       = "http://${helm_release.otel.name}-opentelemetry-collector.${var.otel.namespace}.svc.cluster.local:4318"
 }
 
 output "namespace" {

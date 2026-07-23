@@ -1,11 +1,20 @@
 variable "pyroscope" {
   description = "Grafana Pyroscope configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "1.20.3")
+    chart_version = optional(string, "2.1.2")
+    # Helm repo for the pyroscope chart. Grafana froze the
+    # https://grafana.github.io/helm-charts HTTP repo; the chart is now published
+    # as OCI on ghcr.io. Public registry — no login required.
+    chart_repository      = optional(string, "oci://ghcr.io/grafana/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
     create_namespace      = optional(bool, true)
+
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
 
     replicas = optional(number, 1)
 
@@ -26,7 +35,6 @@ variable "pyroscope" {
       s3_region     = optional(string, "")
       s3_endpoint   = optional(string, "")  # override for S3-compatible endpoints (Hetzner, MinIO, Ceph, etc.)
       s3_insecure   = optional(bool, false) # set true for HTTP-only endpoints
-      s3_path_style = optional(bool, false) # set true for non-AWS S3 (Hetzner, MinIO, Ceph require this)
       s3_access_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
       s3_secret_key = optional(string, "")  # leave empty to use IRSA or s3_credentials_secret
       # Object key prefix for all Pyroscope objects in S3; allows sharing one bucket with other components.
@@ -58,6 +66,11 @@ variable "pyroscope" {
     #   IRSA:              { "eks.amazonaws.com/role-arn" = "arn:aws:iam::123456789012:role/pyroscope" }
     #   Workload Identity: { "iam.gke.io/gcp-service-account" = "pyroscope@project.iam.gserviceaccount.com" }
     service_account_annotations = optional(map(string), {})
+
+    # Raw YAML deep-merged (Helm -f order) on top of the module's generated
+    # values -- for chart knobs this module does not expose (nodeSelector,
+    # tolerations, affinity, etc.). "" disables. Same pattern as the tempo module.
+    extra_values = optional(string, "")
   })
   default = {}
 
@@ -92,5 +105,13 @@ variable "pyroscope" {
       var.pyroscope.storage.azure_container == ""
     ))
     error_message = "When storage.backend is 'azure', azure_storage_account and azure_container are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.pyroscope.storage.s3_credentials_secret, null) != null &&
+      (try(var.pyroscope.storage.s3_access_key, "") != "" || try(var.pyroscope.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key/s3_secret_key. Set only one."
   }
 }

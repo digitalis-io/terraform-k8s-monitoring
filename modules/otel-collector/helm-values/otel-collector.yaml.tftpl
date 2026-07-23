@@ -1,4 +1,9 @@
 mode: ${mode}
+%{ if mode != "daemonset" ~}
+# Deployment/StatefulSet gateway replica count (daemonset ignores this -- one
+# pod per node). Scaled up so a single gateway pod isn't the OTLP ingest ceiling.
+replicaCount: ${replicas}
+%{ endif ~}
 
 service:
   enabled: true
@@ -13,7 +18,22 @@ service:
   internalTrafficPolicy: Local
 %{ endif ~}
 
+# Self-monitoring: expose the collector's own internal telemetry (otelcol_*, on
+# :8888) to the annotation-based prometheus/pods scrape so it lands in Mimir --
+# feeds the "OpenTelemetry Collector" dashboard (gnet 15983). Every collector pod
+# (gateway/consumer/daemonset agent) is annotated; the consumer's (or, kafka-off,
+# the gateway's) cluster-wide prometheus/pods job scrapes them all on pod IP:8888.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8888"
+  prometheus.io/path: "/metrics"
+
 ports:
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
   otlp:
     enabled: true
     containerPort: 4317
@@ -77,6 +97,18 @@ extraEnvs:
     valueFrom:
       fieldRef:
         fieldPath: spec.nodeName
+%{ if use_clickhouse_secret ~}
+  - name: CLICKHOUSE_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: ${clickhouse_secret_name}
+        key: ${clickhouse_secret_username_key}
+  - name: CLICKHOUSE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: ${clickhouse_secret_name}
+        key: ${clickhouse_secret_password_key}
+%{ endif ~}
 
 %{ if mode == "daemonset" ~}
 extraVolumes:
@@ -103,6 +135,34 @@ securityContext:
 %{ endif ~}
 config:
   receivers:
+%{ if kafka_role == "consumer" ~}
+    # Kafka consumer role: drain the buffer topics into the backend exporters.
+    # One receiver per signal/topic; a shared group_id lets multiple consumer
+    # replicas balance partitions. Data was already enriched by the producer, so
+    # the consumer pipelines below run a lean processor set.
+    # topics (plural list) + encoding moved under a per-signal block in the kafka
+    # receiver (contrib >=~0.140); the old top-level topic/encoding keys are gone.
+    # brokers/group_id stay top-level (shared consumer-group settings).
+    kafka/metrics:
+      brokers: [${kafka_brokers}]
+      group_id: ${kafka_consumer_group}
+      metrics:
+        topics: [${kafka_metrics_topic}]
+        encoding: ${kafka_encoding}
+    kafka/logs:
+      brokers: [${kafka_brokers}]
+      group_id: ${kafka_consumer_group}
+      logs:
+        topics: [${kafka_logs_topic}]
+        encoding: ${kafka_encoding}
+    kafka/traces:
+      brokers: [${kafka_brokers}]
+      group_id: ${kafka_consumer_group}
+      traces:
+        topics: [${kafka_traces_topic}]
+        encoding: ${kafka_encoding}
+%{ endif ~}
+%{ if kafka_role != "consumer" ~}
     otlp:
       protocols:
         grpc:
@@ -126,8 +186,15 @@ config:
           parse_to: attributes
           if: '${log_json_match_expr}'
 %{ if log_severity_field != "" ~}
-          severity:
-            parse_from: attributes.${log_severity_field}
+        # Map the app's log level to OTel severity. Standalone + if-guarded rather
+        # than a json_parser `severity:` sub-field: the embedded form fires for
+        # every JSON line the parser handles, so a JSON log without a level field
+        # errors the whole batch ("log entry does not have the expected parse_from
+        # field: attributes.level"). The guard skips lines that lack the field
+        # (plain text, or JSON without a level).
+        - type: severity_parser
+          if: 'attributes["${log_severity_field}"] != nil'
+          parse_from: attributes.${log_severity_field}
 %{ endif ~}
 %{ if log_trace_enabled ~}
         # Promote trace_id/span_id from the parsed JSON into the log record's
@@ -141,14 +208,38 @@ config:
           span_id:
             parse_from: attributes.${log_span_id_field}
 %{ endif ~}
+%{ if log_service_field != "" ~}
+        # Promote the app's own service field to the OTel resource service.name.
+        # Structured stdout logs carry the service in the body (e.g. `service`),
+        # NOT as service.name -- and OTEL_SERVICE_NAME only affects an SDK's OTLP
+        # export, not stdout logs tailed by filelog -- so without this these logs
+        # bucket under `unknown_service` (Loki service_name label). k8sattributes
+        # can't fill it either when the pod has no app.kubernetes.io/name label.
+        # Guarded so lines without the field keep whatever service.name they have.
+        - type: move
+          if: 'attributes["${log_service_field}"] != nil'
+          from: attributes["${log_service_field}"]
+          to: resource["service.name"]
+%{ endif ~}
 %{ endif ~}
     hostmetrics:
       root_path: /hostfs
       collection_interval: ${metrics_collection_interval != "" ? metrics_collection_interval : "10s"}
       scrapers:
-        cpu: {}
+        # system.cpu.utilization / system.memory.utilization are opt-in (default
+        # scrapers emit only system.cpu.time / system.memory.usage). The OTel
+        # HostMetrics dashboard (Grafana 20376) CPU + memory panels query the
+        # utilization gauges, so enable them or those panels stay blank (disk io
+        # is default-on, which is why disk works and cpu/mem don't).
+        cpu:
+          metrics:
+            system.cpu.utilization:
+              enabled: true
         load: {}
-        memory: {}
+        memory:
+          metrics:
+            system.memory.utilization:
+              enabled: true
         disk: {}
         filesystem:
           exclude_mount_points:
@@ -159,11 +250,24 @@ config:
             match_type: strict
         network: {}
         paging: {}
+%{ if hostmetrics_process_enabled ~}
+        # Per-PID process metrics. Off by default: very high cardinality (a series
+        # per PID) AND it carries process.command_line, which a remote-write
+        # backend promotes to a `process_command_line` label -- node command lines
+        # (node-problem-detector, kubelet, ...) blow past Prometheus/Mimir's 2048-
+        # char label-value limit and the whole series is rejected (400). When
+        # enabled, drop the unbounded attributes so they can't become labels.
         process:
           mute_process_name_error: true
           mute_process_exe_error: true
           mute_process_io_error: true
           mute_process_user_error: true
+          resource_attributes:
+            process.command_line:
+              enabled: false
+            process.executable.path:
+              enabled: false
+%{ endif ~}
         processes: {}
     # Per-node kubelet metrics: pod/container CPU, memory, network, filesystem,
     # and volume usage. Talks to the local kubelet over the node's own name
@@ -195,6 +299,126 @@ config:
               - targets: ${jsonencode(prometheus_scrape_targets)}
 %{ endif ~}
 %{ endif ~}
+%{ endif ~}
+
+%{ if kafka_metrics_scrape_enabled ~}
+    # Strimzi/Kafka Prometheus scraping. The Kubernetes pod SD discovers
+    # Strimzi-managed pods (brokers/controllers running the JMX Prometheus
+    # Exporter, plus the Kafka Exporter) in the kafka namespace and scrapes their
+    # :9404 metrics port. Named prometheus/strimzi so it coexists with the static
+    # `prometheus` receiver (kube-state-metrics). Rendered outside the kafka_role
+    # gate so it attaches to whichever deployment collector writes the store
+    # directly -- the consumer in a buffered topology -- keeping Kafka's own
+    # metrics off the buffer they measure. Relabelings mirror Strimzi's PodMonitor
+    # so the shipped Grafana dashboards' label selectors (strimzi_io_cluster,
+    # kubernetes_pod_name, node_name, ...) resolve.
+    prometheus/strimzi:
+      config:
+        scrape_configs:
+          - job_name: strimzi
+            scrape_interval: ${kafka_metrics_scrape_interval != "" ? kafka_metrics_scrape_interval : (metrics_collection_interval != "" ? metrics_collection_interval : "30s")}
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names: [${kafka_metrics_scrape_namespace}]
+            relabel_configs:
+              # Keep only Strimzi-managed pods (they carry strimzi.io/cluster) ...
+              - source_labels: [__meta_kubernetes_pod_label_strimzi_io_cluster]
+                action: keep
+                regex: .+
+              # ... and only their metrics container port (JMX exporter / Kafka
+              # Exporter both expose :9404).
+              - source_labels: [__meta_kubernetes_pod_container_port_number]
+                action: keep
+                regex: "9404"
+              # Promote strimzi.io/* pod labels to metric labels (strimzi_io_cluster,
+              # strimzi_io_kind, strimzi_io_name, ...), matching Strimzi's PodMonitor.
+              - action: labelmap
+                regex: __meta_kubernetes_pod_label_(strimzi_io_.+)
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: kubernetes_pod_name
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: node_name
+              - source_labels: [__meta_kubernetes_pod_host_ip]
+                target_label: node_ip
+%{ endif ~}
+%{ if pod_scrape_enabled ~}
+    # Cluster-wide annotation-based pod scraping. The Kubernetes pod SD discovers
+    # every pod annotated prometheus.io/scrape="true" and scrapes its
+    # prometheus.io/port + prometheus.io/path (default /metrics) -- e.g. the
+    # firehose load-gen (firehose_export_wire_bytes_total on :2112). This honors
+    # the de-facto Prometheus annotation convention; it does NOT read
+    # ServiceMonitor/PodMonitor CRDs (the coreos prometheus-operator CRDs are not
+    # installed). Rendered outside the kafka_role gate so it attaches to whichever
+    # deployment collector writes the store directly.
+    prometheus/pods:
+      config:
+        scrape_configs:
+          - job_name: kubernetes-pods
+            scrape_interval: ${pod_scrape_interval != "" ? pod_scrape_interval : (metrics_collection_interval != "" ? metrics_collection_interval : "30s")}
+            kubernetes_sd_configs:
+              - role: pod
+%{ if length(pod_scrape_namespaces) > 0 ~}
+                namespaces:
+                  names: ${jsonencode(pod_scrape_namespaces)}
+%{ endif ~}
+            relabel_configs:
+              # Only pods opting in via prometheus.io/scrape="true".
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: "true"
+              # Drop terminated pods' phantom SD targets.
+              - source_labels: [__meta_kubernetes_pod_phase]
+                action: drop
+                regex: "(Succeeded|Failed)"
+              # metrics path <- prometheus.io/path (default stays /metrics).
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                action: replace
+                target_label: __metrics_path__
+                regex: "(.+)"
+              # address <- podIP:prometheus.io/port.
+              - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                regex: "([^:]+)(?::\\d+)?;(\\d+)"
+                replacement: "$1:$2"
+                target_label: __address__
+              # Promote app labels for dashboards (Strimzi + generic).
+              - action: labelmap
+                regex: "__meta_kubernetes_pod_label_(strimzi_io_.+)"
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: kubernetes_pod_name
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: node_name
+              # Loki mixin compatibility: the grafana.com Loki dashboards match
+              # cluster + job="<namespace>/loki-<component>" + pod, but the generic
+              # annotation scrape above only yields job="kubernetes-pods" and no
+              # cluster label -- so the mixin's $cluster template var is empty and
+              # every panel filters to nothing. Stamp the mixin labels, scoped to
+              # Loki pods (app.kubernetes.io/name=loki) via regex so non-Loki
+              # targets (firehose, Strimzi, KSM) keep job=kubernetes-pods. Mirrors
+              # what Mimir/Tempo get from their grafana-agent meta-monitoring.
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                regex: loki
+                target_label: cluster
+                replacement: loki
+              # NOTE: $$1/$$2 (double-dollar). The OTel Collector confmap expands
+              # dollar-brace env-var refs, so a single-dollar capture-group ref here
+              # is misread as env var "1" and the collector fails to start
+              # ("invalid name"). Doubling escapes it: templatefile emits $$1, OTel
+              # unescapes $$ to a single dollar, leaving Prometheus its $$1 ref.
+              - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_label_app_kubernetes_io_component]
+                regex: (.+);(loki);(.+)
+                target_label: job
+                replacement: $$1/$$2-$$3
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_name]
+                regex: loki;(.+)
+                target_label: pod
+                replacement: $$1
+%{ endif ~}
 
   processors:
     batch: {}
@@ -220,6 +444,35 @@ config:
           value: "${service_namespace}"
           action: insert
 %{ endif ~}
+%{ if mode == "daemonset" ~}
+    # Stamp host.name from the node the agent runs on. hostmetrics/kubeletstats
+    # emit no host identity of their own, so without this (a) every agent's
+    # series share one label set and collide in Mimir (duplicate/out-of-order
+    # samples), and (b) OTel HostMetrics dashboards (Grafana 20376) that template
+    # on host_name have no per-node values. $${env:...} escapes the Terraform
+    # templatefile pass so the collector expands KUBE_NODE_NAME at runtime;
+    # resource_to_telemetry_conversion then promotes host.name -> host_name label.
+    resource/hostname:
+      attributes:
+        - key: host.name
+          value: "$${env:KUBE_NODE_NAME}"
+          action: upsert
+%{ endif ~}
+    # Drop unbounded process.* resource attributes before remote-write. Both the
+    # hostmetrics `process` scraper AND app SDKs (the Go OTel process resource
+    # detector) stamp process.command_line -- the full container command line --
+    # which resource_to_telemetry_conversion would promote to a
+    # `process_command_line` label exceeding Mimir's 2048-char limit, failing the
+    # entire remote-write request (err-mimir-label-value-too-long, 400). Also drop
+    # executable.path / command (long, high-cardinality). Applied on metrics only.
+    resource/strip_process:
+      attributes:
+        - key: process.command_line
+          action: delete
+        - key: process.executable.path
+          action: delete
+        - key: process.command
+          action: delete
 %{ if gigapipe_label_keep != "" ~}
     # gigapipe/qryn promotes EVERY OTLP resource attribute to an indexed label
     # (its time_series/fingerprint model has no structured-metadata tier like
@@ -237,6 +490,7 @@ config:
           statements:
             - keep_keys(attributes, [${gigapipe_label_keep}])
 %{ endif ~}
+%{ if kafka_role != "consumer" ~}
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -270,10 +524,46 @@ config:
               name: k8s.pod.uid
         - sources:
             - from: connection
+%{ endif ~}
 
   exporters:
     debug:
       verbosity: basic
+%{ if kafka_role == "producer" ~}
+    # Kafka producer role: this collector ships OTLP to the buffer topics instead
+    # of writing the backends directly (a consumer collector drains them). One
+    # exporter per signal -- each is used in its matching pipeline below.
+    # topic/encoding moved under a per-signal block in the kafka exporter
+    # (contrib >=~0.140); the old top-level topic/encoding keys are rejected.
+    # producer.max_message_bytes must be >= the broker/topic max.message.bytes,
+    # else large firehose batches fail with MESSAGE_TOO_LARGE. producer.compression
+    # shrinks the batch Kafka size-checks (enforced on the COMPRESSED batch), so
+    # zstd/snappy keeps big log batches under the cap and cuts broker storage.
+    kafka/metrics:
+      brokers: [${kafka_brokers}]
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
+      metrics:
+        topic: ${kafka_metrics_topic}
+        encoding: ${kafka_encoding}
+    kafka/logs:
+      brokers: [${kafka_brokers}]
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
+      logs:
+        topic: ${kafka_logs_topic}
+        encoding: ${kafka_encoding}
+    kafka/traces:
+      brokers: [${kafka_brokers}]
+      producer:
+        max_message_bytes: ${kafka_max_message_bytes}
+        compression: ${kafka_compression}
+      traces:
+        topic: ${kafka_traces_topic}
+        encoding: ${kafka_encoding}
+%{ endif ~}
 %{ if tempo_endpoint != "" ~}
     otlp/tempo:
       endpoint: ${tempo_endpoint}
@@ -288,6 +578,12 @@ config:
       endpoint: ${mimir_endpoint}
       headers:
         X-Scope-OrgID: "${mimir_tenant_id}"
+      # Emit OTel metric names verbatim (system.cpu.time -> system_cpu_time), not
+      # system_cpu_time_seconds_total. OTel-native dashboards (Grafana 20376 OTel
+      # HostMetrics) query the un-suffixed names; the Prom-style unit/_total
+      # suffixes (default true) leave their variable/panel queries matching zero
+      # series. Applies to every metric on this exporter, not just hostmetrics.
+      add_metric_suffixes: false
       resource_to_telemetry_conversion:
         enabled: true
 %{ endif ~}
@@ -296,6 +592,9 @@ config:
       endpoint: ${mimir2_endpoint}
       headers:
         X-Scope-OrgID: "${mimir2_tenant_id}"
+      # See prometheusremotewrite above: keep OTel-native metric names so the
+      # OTel HostMetrics dashboards (Grafana 20376) resolve their queries.
+      add_metric_suffixes: false
       resource_to_telemetry_conversion:
         enabled: true
 %{ endif ~}
@@ -334,18 +633,23 @@ config:
 %{ endif ~}
 %{ if clickhouse_endpoint != "" ~}
     clickhouse:
-      endpoint: ${clickhouse_endpoint}
+      endpoint: "${clickhouse_endpoint}"
+%{ if use_clickhouse_secret ~}
+      username: "$${env:CLICKHOUSE_USERNAME}"
+      password: "$${env:CLICKHOUSE_PASSWORD}"
+%{ else ~}
 %{ if clickhouse_username != "" ~}
-      username: ${clickhouse_username}
-      password: ${clickhouse_password}
+      username: "${clickhouse_username}"
+      password: "${clickhouse_password}"
 %{ endif ~}
-      database: ${clickhouse_database}
+%{ endif ~}
+      database: "${clickhouse_database}"
 %{ if clickhouse_cluster != "" ~}
-      cluster_name: ${clickhouse_cluster}
+      cluster_name: "${clickhouse_cluster}"
 %{ endif ~}
 %{ if clickhouse_table_engine != "" ~}
       table_engine:
-        name: ${clickhouse_table_engine}
+        name: "${clickhouse_table_engine}"
 %{ endif ~}
       logs_table_name: otel_logs
       traces_table_name: otel_traces
@@ -359,14 +663,43 @@ config:
 %{ endif ~}
 
   service:
+    # Bind the collector's internal telemetry to all interfaces so the annotation
+    # scrape (prometheus/pods, on pod IP:8888) can reach otelcol_* -- the chart
+    # default may bind localhost only. Feeds gnet 15983.
+    # Collector 0.123+ removed service.telemetry.metrics.address; configure the
+    # internal Prometheus endpoint via a pull reader instead.
+    telemetry:
+      metrics:
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
     pipelines:
+%{ if kafka_role == "consumer" ~}
+      # Consumer role: read the buffer topics, apply only memory_limiter + batch
+      # (enrichment already happened on the producer), write the backends.
+      metrics:
+        receivers: ${consumer_metrics_receivers}
+        processors: [memory_limiter, resource/strip_process, batch]
+        exporters: ${metrics_exporters}
+      logs:
+        receivers: [kafka/logs]
+        processors: [memory_limiter, batch]
+        exporters: ${logs_exporters}
+      traces:
+        receivers: [kafka/traces]
+        processors: [memory_limiter, batch]
+        exporters: ${traces_exporters}
+%{ else ~}
       traces:
         receivers: [otlp]
         processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}${clickhouse_endpoint != "" ? "batch/clickhouse" : "batch"}]
         exporters: ${traces_exporters}
       metrics:
         receivers: ${metrics_receivers}
-        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}batch]
+        processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}%{ if mode == "daemonset" ~}resource/hostname, %{ endif ~}resource/strip_process, batch]
         exporters: ${metrics_exporters}
       logs:
         receivers: ${logs_receivers}
@@ -381,6 +714,7 @@ config:
         receivers: ${logs_receivers}
         processors: [memory_limiter, k8sattributes, %{ if service_namespace != "" ~}resource/service_ns, %{ endif ~}transform/gigapipe_labels, batch]
         exporters: [otlphttp/logs]
+%{ endif ~}
 %{ endif ~}
 
 resources:
@@ -415,4 +749,22 @@ tolerations:
 %{ endif ~}
     effect: "${t.effect}"
 %{ endfor ~}
+%{ endif ~}
+%{ if mode != "daemonset" ~}
+# Cross-AZ egress reduction for the gateway/consumer Deployment: spread replicas
+# one-per-zone so a same-zone endpoint exists for callers using
+# Service.trafficDistribution=PreferSameZone (agent -> gateway, gateway ->
+# stores). Soft (ScheduleAnyway) so it never blocks scheduling on a constrained
+# pool. The chart renders topologySpreadConstraints verbatim (no auto
+# labelSelector), so pin it to THIS release's pods -- otherwise the constraint
+# would span every collector release in the namespace. daemonset mode is
+# per-node already (see internalTrafficPolicy Local above), so this is skipped.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: opentelemetry-collector
+        app.kubernetes.io/instance: ${release_name}
 %{ endif ~}

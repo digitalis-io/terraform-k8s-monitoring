@@ -1,7 +1,7 @@
 variable "cert_manager" {
   description = "cert-manager configuration."
   type = object({
-    chart_version         = optional(string, "v1.19.1")
+    chart_version         = optional(string, "v1.21.0")
     namespace             = optional(string, "cert-manager")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
@@ -32,6 +32,11 @@ variable "cert_manager" {
     # Path to the kubeconfig file used by kubectl in local-exec provisioners.
     # When empty, kubectl uses its default resolution order (KUBECONFIG env var, then ~/.kube/config).
     kubeconfig_path = optional(string, "")
+
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 300)
 
     # Pod scheduling, applied to all cert-manager components (controller,
     # webhook, cainjector, startupapicheck). tolerations let the pods schedule

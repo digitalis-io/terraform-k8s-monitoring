@@ -1,7 +1,14 @@
 variable "loki" {
   description = "Grafana Loki configuration. All fields are optional with safe defaults for a local-disk deployment."
   type = object({
-    chart_version         = optional(string, "6.6.0")
+    chart_version = optional(string, "7.1.0")
+    # Helm repo for the loki chart. The official chart lives in the grafana/loki
+    # repo (production/helm/loki) and is published as OCI on ghcr.io; Grafana
+    # froze the grafana.github.io HTTP repo. Public registry — no login required.
+    # For Loki >= 3.7 the community-maintained grafana-community fork uses its own
+    # numbering (e.g. chart 18.5.0 = Loki 3.7.3); point here + set that
+    # chart_version to run it.
+    chart_repository      = optional(string, "oci://ghcr.io/grafana/helm-charts")
     namespace             = optional(string, "monitoring")
     namespace_labels      = optional(map(string), {})
     namespace_annotations = optional(map(string), {})
@@ -11,6 +18,11 @@ variable "loki" {
     deployment_mode  = optional(string, "single-binary")
     replicas         = optional(number, 1)
     retention_period = optional(string, "744h") # 31 days
+
+    # Helm release wait behaviour.
+    wait          = optional(bool, true)
+    wait_for_jobs = optional(bool, true)
+    timeout       = optional(number, 600)
 
     resources = optional(object({
       requests_cpu    = optional(string, "100m")
@@ -104,5 +116,13 @@ variable "loki" {
       var.loki.storage.azure_ruler_container == ""
     ))
     error_message = "When storage.backend is 'azure', azure_storage_account and both azure container names are required."
+  }
+
+  validation {
+    condition = !(
+      try(var.loki.storage.s3_credentials_secret, null) != null &&
+      (try(var.loki.storage.s3_access_key, "") != "" || try(var.loki.storage.s3_secret_key, "") != "")
+    )
+    error_message = "storage.s3_credentials_secret is mutually exclusive with storage.s3_access_key/s3_secret_key. Set only one method for supplying S3 credentials."
   }
 }

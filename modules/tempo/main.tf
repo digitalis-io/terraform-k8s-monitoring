@@ -55,15 +55,15 @@ resource "kubernetes_namespace" "tempo" {
 
 resource "helm_release" "tempo" {
   name       = "tempo"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.tempo.chart_repository
   chart      = "tempo-distributed"
   version    = var.tempo.chart_version
   namespace  = var.tempo.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.tempo.wait
+  wait_for_jobs    = var.tempo.wait_for_jobs
+  timeout          = var.tempo.timeout
 
   values = [
     templatefile("${path.module}/helm-values/tempo.yaml.tftpl", {
@@ -104,6 +104,7 @@ resource "helm_release" "tempo" {
 
       service_account_annotations        = var.tempo.service_account_annotations
       metrics_generator_remote_write_url = var.tempo.metrics_generator_remote_write_url
+      tenant_id                          = var.tempo.tenant_id
     }),
     var.tempo.extra_values
   ]

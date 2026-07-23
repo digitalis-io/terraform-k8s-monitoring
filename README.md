@@ -164,7 +164,7 @@ module "cert_manager" {
   source = "github.com/digitalis-io/terraform-k8s-monitoring//modules/cert-manager"
 
   cert_manager = {
-    chart_version       = "v1.19.1"
+    chart_version       = "v1.21.0"
     namespace           = "cert-manager"
     create_namespace    = true
     cluster_issuer_name = "selfsigned-cluster-issuer"
@@ -174,7 +174,7 @@ module "cert_manager" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"v1.19.1"` | cert-manager Helm chart version |
+| `chart_version` | `"v1.21.0"` | cert-manager Helm chart version |
 | `namespace` | `"cert-manager"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `cluster_issuer_name` | `"selfsigned-cluster-issuer"` | Name of the ClusterIssuer to create — must match the `cert-manager.io/cluster-issuer` annotation in other modules |
@@ -204,7 +204,9 @@ module "mimir" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"5.6.0"` | Mimir distributed Helm chart version |
+| `chart_version` | `"6.1.0"` | Mimir distributed Helm chart version |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the `mimir-distributed` chart. Grafana froze the `grafana.github.io` HTTP repo; the chart is now published as OCI on ghcr.io (public — no login needed) |
+| `kafka_ingest` | `{ enabled = false }` | Kafka ingest-storage architecture (Mimir 3.x write path). Off = classic ingester path. `enabled = true` with empty `address` deploys the chart's bundled demo Kafka; set `address` (host:port) to use an external broker. `topic`/`partitions` override the defaults. See `examples/mimir-kafka` |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `retention_period` | `"30d"` | How long to keep metrics |
 | `tenant_id` | `"anonymous"` | Value sent in `X-Scope-OrgID` header by Prometheus and Grafana |
@@ -255,7 +257,7 @@ module "prometheus" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"86.3.2"` | kube-prometheus-stack Helm chart version |
+| `chart_version` | `"87.19.0"` | kube-prometheus-stack Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -350,7 +352,8 @@ module "loki" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"6.6.0"` | Loki Helm chart version |
+| `chart_version` | `"7.1.0"` | Loki Helm chart version |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the Loki chart. Official chart is now OCI on ghcr.io (`grafana/loki` repo; the `grafana.github.io` HTTP repo is frozen). Point at the `grafana-community` fork (with a community `chart_version`) to run Loki ≥ 3.7 |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `deployment_mode` | `"single-binary"` | `single-binary` or `scalable` |
@@ -391,7 +394,8 @@ module "tempo" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.40.0"` | Tempo Helm chart version |
+| `chart_version` | `"2.26.0"` | Tempo (`tempo-distributed`) Helm chart version. 2.x keeps the classic ingester/compactor architecture (Tempo 2.10.x); 3.x moves to a Kafka-based ingest pipeline |
+| `chart_repository` | `"oci://ghcr.io/grafana-community/helm-charts"` | Helm repo for the `tempo-distributed` chart. Now community-maintained on the `grafana-community` OCI registry (the `grafana.github.io` HTTP repo is frozen); public — no login needed |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -441,7 +445,7 @@ module "otel" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"0.158.2"` | OpenTelemetry Collector Helm chart version |
+| `chart_version` | `"0.165.0"` | OpenTelemetry Collector Helm chart version |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -471,7 +475,7 @@ module "otel" {
 | `image.tag` | `""` | Image tag (empty = chart appVersion) |
 | `image.pull_policy` | `"IfNotPresent"` | Image pull policy |
 | `operator.enabled` | `false` | Deploy the OpenTelemetry Operator for auto-instrumentation |
-| `operator.chart_version` | `"0.116.0"` | Operator Helm chart version |
+| `operator.chart_version` | `"0.120.0"` | Operator Helm chart version |
 | `operator.collector_image_repository` | `"otel/opentelemetry-collector-k8s"` | Operator's default collector image repository |
 | `operator.cert_manager_enabled` | `false` | Use cert-manager for webhook certificates |
 | `operator.auto_generate_cert_enabled` | `true` | Auto-generate webhook certificates (incompatible with cert-manager) |
@@ -517,7 +521,8 @@ module "alloy" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"0.12.5"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `chart_version` | `"1.11.0"` | Alloy Helm chart version — check [ArtifactHub](https://artifacthub.io/packages/helm/grafana/alloy) for the latest |
+| `chart_repository` | `"https://grafana.github.io/helm-charts"` | Helm repo for the Alloy chart. Alloy has no OCI package yet, so it stays on the HTTP repo |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -656,7 +661,8 @@ module "pyroscope" {
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `chart_version` | `"1.20.3"` | Pyroscope Helm chart version |
+| `chart_version` | `"2.1.2"` | Pyroscope Helm chart version |
+| `chart_repository` | `"oci://ghcr.io/grafana/helm-charts"` | Helm repo for the Pyroscope chart. Now OCI on ghcr.io (the `grafana.github.io` HTTP repo is frozen); public — no login needed |
 | `namespace` | `"monitoring"` | Namespace to deploy into |
 | `create_namespace` | `true` | Create the namespace if it does not exist |
 | `namespace_labels` | `{}` | Additional labels to apply to the namespace |
@@ -786,7 +792,11 @@ Complete, copy-paste examples are available in the `examples/` directory:
 | `examples/alloy-basic/` | Alloy DaemonSet collector wired to Loki, Tempo, and Mimir |
 | `examples/alloy-faro-receiver/` | Alloy DaemonSet collector plus a second Alloy release configured as a Faro RUM receiver, both wired to Loki and Tempo |
 | `examples/aws/` | S3 backend with IRSA authentication on EKS |
-| `examples/gcp/` | GCS backend with Workload Identity on GKE |
+| `examples/s3compatible/` | S3-compatible storage (Hetzner, MinIO, Ceph) with path-style addressing |
+| `examples/gcp/` | Full stack on GCS backend with Workload Identity on GKE |
+| `examples/gcp/mimir-gcs/` | Metrics-only slice — Mimir (GCS) + Grafana on GKE, with ACME/Let's Encrypt ingress TLS |
+| `examples/kafka/` | Kafka-buffered pipeline — a producer OTel Collector ships OTLP to Kafka topics and a consumer Collector drains them into Tempo/Mimir/Loki (bring your own broker) |
+| `examples/mimir-kafka/` | Mimir with the Kafka ingest-storage backend — Prometheus remote-writes through Kafka into Mimir (bundled demo Kafka by default, or bring your own broker) |
 
 ### Use S3 for Mimir storage (with IRSA)
 
@@ -1346,7 +1356,7 @@ module "otel" {
 
     operator = {
       enabled           = true
-      chart_version     = "0.116.0"
+      chart_version     = "0.120.0"
       cert_manager_enabled = false  # auto-generate webhook certs by default
       # Enable Go eBPF instrumentation (requires Linux kernel >=4.19)
       go_instrumentation_enabled = true

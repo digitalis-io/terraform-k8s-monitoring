@@ -55,15 +55,15 @@ resource "kubernetes_namespace" "loki" {
 
 resource "helm_release" "loki" {
   name       = "loki"
-  repository = "https://grafana.github.io/helm-charts"
+  repository = var.loki.chart_repository
   chart      = "loki"
   version    = var.loki.chart_version
   namespace  = var.loki.namespace
 
   create_namespace = false
-  wait             = true
-  wait_for_jobs    = true
-  timeout          = 600
+  wait             = var.loki.wait
+  wait_for_jobs    = var.loki.wait_for_jobs
+  timeout          = var.loki.timeout
 
   values = [
     templatefile("${path.module}/helm-values/loki.yaml.tftpl", {
